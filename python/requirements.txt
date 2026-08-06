@@ -1,8 +1,8 @@
-llama-index 
-llama-index-embeddings-huggingface 
-nest-asyncio 
-llama-index-embeddings-fastembed 
-fastembed 
+llama-index
+llama-index-embeddings-huggingface
+nest-asyncio
+llama-index-embeddings-fastembed
+fastembed
 llama-index-vector-stores-faiss
 pandas
 llama-index-llms-openrouter
@@ -29,3 +29,4 @@ torch
 transformers
 beautifulsoup4
 lxml
+rapidfuzz

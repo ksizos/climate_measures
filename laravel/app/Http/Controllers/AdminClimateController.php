@@ -18,6 +18,19 @@ class AdminClimateController extends Controller
         return view('admin.climate', compact('cases'));
     }
 
+    private string $apiBaseUrl;
+
+    public function __construct()
+    {
+        $this->apiBaseUrl = rtrim(
+            (string) config(
+                'services.climate_api.url',
+                'http://127.0.0.1:8001'
+            ),
+            '/'
+        );
+    }
+
     // Получить кейсы для AJAX
     public function getCases()
     {
@@ -129,10 +142,20 @@ class AdminClimateController extends Controller
     public function generateData(Request $request)
     {
         try {
-            $response = Http::timeout(60)
-                ->post('http://localhost:8001/generate-structured-data', [
-                    'prompt' => $request->prompt
-                ]);
+            $response = Http::connectTimeout(10)
+                ->timeout(
+                    (int) config(
+                        'services.climate_api.timeout',
+                        600
+                    )
+                )
+                ->post(
+                    $this->apiBaseUrl
+                        . '/generate-structured-data',
+                    [
+                        'prompt' => $request->input('prompt'),
+                    ]
+                );
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -160,7 +183,6 @@ class AdminClimateController extends Controller
                     'success' => false,
                     'error' => 'Некорректный формат ответа от AI'
                 ], 500);
-
             } else {
                 Log::error('Ошибка FastAPI при генерации данных', [
                     'status' => $response->status(),
@@ -220,7 +242,6 @@ class AdminClimateController extends Controller
                 'case_id' => $case->id,
                 'case' => $case
             ]);
-
         } catch (\Exception $e) {
             Log::error('Ошибка сохранения сгенерированных данных', [
                 'message' => $e->getMessage(),
@@ -233,5 +254,4 @@ class AdminClimateController extends Controller
             ], 500);
         }
     }
-
 }

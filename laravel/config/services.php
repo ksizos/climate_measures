@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    'climate_api' => [
+        'url' => env(
+            'CLIMATE_API_URL',
+            'http://127.0.0.1:8001'
+        ),
+
+        'timeout' => (int) env(
+            'CLIMATE_API_TIMEOUT',
+            600
+        ),
+    ],
 ];

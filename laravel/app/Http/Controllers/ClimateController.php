@@ -77,9 +77,17 @@ class ClimateController extends Controller
      */
     public function askQuestion(Request $request)
     {
+        set_time_limit(
+            (int) config(
+                'services.climate_api.timeout',
+                600
+            )
+        );
+
         $request->validate([
             'question' => 'required|string|min:3|max:1000',
-            'conversation_id' => 'nullable|exists:conversations,id,user_id,' . auth()->id()
+            'conversation_id' =>
+            'nullable|exists:conversations,id,user_id,' . auth()->id(),
         ]);
 
         try {
@@ -120,13 +128,21 @@ class ClimateController extends Controller
                 'context_length' => strlen($context)
             ]);
 
-            $response = Http::timeout(120)
-                ->retry(3, 1000)
-                ->post($this->apiBaseUrl . '/ask', [
-                    'question' => $request->question,
-                    'conversation_id' => $conversation_id,
-                    'context' => $context // Передаем контекст
-                ]);
+            $response = Http::connectTimeout(10)
+                ->timeout(
+                    (int) config(
+                        'services.climate_api.timeout',
+                        600
+                    )
+                )
+                ->post(
+                    $this->apiBaseUrl . '/ask',
+                    [
+                        'question' => $request->question,
+                        'conversation_id' => $conversation_id,
+                        'context' => $context,
+                    ]
+                );
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -163,7 +179,6 @@ class ClimateController extends Controller
                     'error' => 'Сервис временно недоступен. Попробуйте позже.'
                 ], 500);
             }
-
         } catch (\Exception $e) {
             Log::error('Исключение при обращении к Climate API', [
                 'message' => $e->getMessage(),
@@ -289,7 +304,6 @@ class ClimateController extends Controller
                 'success' => false,
                 'error' => $error['detail'] ?? 'Ошибка генерации файла'
             ], $response->status() ?: 500);
-
         } catch (\Exception $e) {
             Log::error('DOCX export proxy error', ['message' => $e->getMessage()]);
             return response()->json([
@@ -327,7 +341,6 @@ class ClimateController extends Controller
                 'success' => false,
                 'error' => $error['detail'] ?? 'Ошибка генерации файла'
             ], $response->status() ?: 500);
-
         } catch (\Exception $e) {
             Log::error('Excel export proxy error', ['message' => $e->getMessage()]);
             return response()->json([

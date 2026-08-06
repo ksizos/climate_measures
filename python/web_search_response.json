@@ -1,0 +1,114 @@
+{
+  "id": "c1c13aaa-0ac0-4fd4-af2c-103780f76317",
+  "created_at": 1785771683.0,
+  "error": null,
+  "incomplete_details": null,
+  "instructions": "Обязательно используй встроенный инструмент web_search. Не пиши названия инструментов, служебные маркеры, TOOL_CALL_START или псевдовызовы. После завершения поиска верни краткую фактическую выжимку. Для каждого найденного документа укажи название, номер, дату, орган власти и прямую ссылку. Не придумывай ссылки и документы.",
+  "metadata": {},
+  "model": "gpt://b1gnojhqr5a8rjtut6rd/yandexgpt-lite",
+  "object": "response",
+  "output": [
+    {
+      "id": "e32c0a72-6fc4-4647-8bfa-0ca7151be258",
+      "action": {
+        "type": "search",
+        "queries": null,
+        "query": "действующие национальные планы адаптации к изменениям климата в России",
+        "sources": null,
+        "valid": true
+      },
+      "status": "completed",
+      "type": "web_search_call",
+      "valid": true
+    },
+    {
+      "id": "1880342c-f9a3-47dd-b5bb-4ef5610fcfc2",
+      "content": [
+        {
+          "annotations": [
+            {
+              "end_index": 0,
+              "start_index": 0,
+              "title": "Презентация PowerPoint",
+              "type": "url_citation",
+              "url": "https://www.economy.gov.ru/material/file/f400e099af84821321639151851e72c0/obzor_rossiyskih_praktik_v_sfere_nizkouglerodnogo_razvitiya_i_adaptacii_k_izmeneniyam_klimata.pdf",
+              "valid": true
+            },
+            {
+              "end_index": 0,
+              "start_index": 0,
+              "title": "ОТВЕТЫ НА ВОПРОСЫ ПО МЕТОДИЧЕСКИМ РЕКОМЕНДАЦИЯМ В СФЕРЕ",
+              "type": "url_citation",
+              "url": "https://www.economy.gov.ru/material/file/70901803fcca730a3b2c7b5c11531ba1/adaptaciya_k_izmeneniyam_klimata_faq_2025.pdf",
+              "valid": true
+            }
+          ],
+          "text": "1. **Название документа:** Национальный план мероприятий первого этапа адаптации к изменениям климата на период до 2022 г.\n   - **Номер:** не указан.\n   - **Дата:** 25 декабря 2019 г.\n   - **Орган власти:** Правительство РФ.\n   - **Ссылка:** [https://www.economy.gov.ru/material/file/f400e099af84821321639151851e72c0/obzor_rossiyskih_praktik_v_sfere_nizkouglerodnogo_razvitiya_i_adaptacii_k_izmeneniyam_klimata.pdf](https://www.economy.gov.ru/material/file/f400e099af84821321639151851e72c0/obzor_rossiyskih_praktik_v_sfere_nizkouglerodnogo_razvitiya_i_adaptacii_k_izmeneniyam_klimata.pdf)\n\n2. **Название документа:** ОТВЕТЫ НА ВОПРОСЫ ПО МЕТОДИЧЕСКИМ РЕКОМЕНДАЦИЯМ В СФЕРЕ адаптации к изменениям климата (FAQ 2025).\n   - **Номер:** не указан.\n   - **Дата:** не указана.\n   - **Орган власти:** Минэкономразвития России.\n   - **Ссылка:** [https://www.economy.gov.ru/material/file/70901803fcca730a3b2c7b5c11531ba1/adaptaciya_k_izmeneniyam_klimata_faq_2025.pdf](https://www.economy.gov.ru/material/file/70901803fcca730a3b2c7b5c11531ba1/adaptaciya_k_izmeneniyam_klimata_faq_2025.pdf)\n   - **Примечание:** документ относится ко второму этапу адаптации к изменениям климата на период до 2025 года.",
+          "type": "output_text",
+          "logprobs": null,
+          "valid": true
+        }
+      ],
+      "role": "assistant",
+      "status": "completed",
+      "type": "message",
+      "phase": null,
+      "valid": true
+    }
+  ],
+  "parallel_tool_calls": false,
+  "temperature": 0.1,
+  "tool_choice": "auto",
+  "tools": [
+    {
+      "type": "web_search",
+      "filters": {
+        "allowed_domains": [
+          "publication.pravo.gov.ru",
+          "government.ru",
+          "economy.gov.ru",
+          "consultant.ru"
+        ],
+        "valid": true
+      },
+      "search_context_size": null,
+      "user_location": null,
+      "valid": true
+    }
+  ],
+  "top_p": 1.0,
+  "background": false,
+  "completed_at": null,
+  "conversation": null,
+  "max_output_tokens": 2500,
+  "max_tool_calls": null,
+  "moderation": null,
+  "previous_response_id": null,
+  "prompt": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": null,
+  "safety_identifier": null,
+  "service_tier": "default",
+  "status": "completed",
+  "text": null,
+  "top_logprobs": null,
+  "truncation": null,
+  "usage": {
+    "input_tokens": 733,
+    "input_tokens_details": {
+      "cached_tokens": 288,
+      "valid": true,
+      "tool_tokens": 1880
+    },
+    "output_tokens": 531,
+    "output_tokens_details": {
+      "reasoning_tokens": 0,
+      "valid": true
+    },
+    "total_tokens": 3144,
+    "valid": true
+  },
+  "user": null,
+  "valid": true
+}

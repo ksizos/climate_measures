@@ -49,14 +49,9 @@ Route::middleware(['auth', 'admin.redirect'])->group(function () {
     Route::get('/climate/conversations', [ClimateController::class, 'getConversations'])->name('conversations.get');
     Route::delete('/climate/conversation/{id}', [ClimateController::class, 'deleteConversation'])->name('conversation.delete');
     Route::post('/climate/approve-measure', [ClimateController::class, 'approveMeasure']);
-
-    // Экспорт файлов
-    Route::post('/export/docx', [FileExportController::class, 'generateDocx'])->name('export.docx');
-    Route::post('/export/excel', [FileExportController::class, 'generateExcel'])->name('export.excel');
-    Route::post('/export/check-tables', [FileExportController::class, 'checkForTables'])->name('export.check-tables');
 });
 // Экспорт файлов (прокси через Python)
 Route::post('/climate/export/docx', [ClimateController::class, 'exportDocx'])->name('climate.export.docx');
 Route::post('/climate/export/excel', [ClimateController::class, 'exportExcel'])->name('climate.export.excel');
 // Маршруты аутентификации
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

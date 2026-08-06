@@ -20,6 +20,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('conversation_pairs');
+        Schema::dropIfExists(
+            'messages'
+        );
     }
 };

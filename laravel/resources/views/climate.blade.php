@@ -1,180 +1,44 @@
-@extends('layouts.app2')
+@extends('layouts.app')
 
-@section('title', 'Система адаптации к климатическим рискам')
+@section('title', 'Климатический консультант')
+
+@push('styles')
+<link
+    rel="stylesheet"
+    href="{{ asset('css/climate/index.css') }}">
+@endpush
+
 
 @section('content')
-    <div class="container-fluid h-100">
-        <div class="row h-100">
 
-            <aside id="sidebar" class="sidebar col-md-3 col-lg-2 px-4 py-5">
-            <div class="d-flex flex-column justify-content-between h-100">
-                    <div>
-                        <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="climate-app">
 
-                            <!-- СТРЕЛКА СЛЕВА -->
-                            <div>
-                                <img
-                                    id="sidebarToggle"
-                                    class="aside_img"
-                                    src="{{ asset('icons/arrow.png') }}"
-                                    alt="Свернуть"
-                                    style="cursor:pointer;"
-                                />
-                            </div>
+    <x-climate.sidebar
+        :conversations="$conversations" />
 
-                            <!-- ИКОНКИ СПРАВА -->
-                            <div class="d-flex align-items-center gap-3">
-                                <img class="aside_img bin-icon"
-                                     src="{{ asset('icons/bin.png') }}"
-                                     alt="Корзина"
-                                     title="Режим удаления" />
+    <main class="climate-main">
 
-                                <img class="aside_img new-chat-btn"
-                                     src="{{ asset('icons/chat.png') }}"
-                                     alt="Новый чат"
-                                     title="Новый чат" />
-                            </div>
+        <x-climate.header />
 
-                        </div>
+        <section class="climate-content">
 
+            <x-climate.welcome />
 
+            <x-climate.messages />
 
-                        <div class="position-relative d-flex align-items-center mb-3">
-                            <input type="search" class="search w-100 py-0 px-2" placeholder="Поиск в истории..." />
-                            <img
-                                src="{{ asset('icons/search.png') }}"
-                                class="search_icon position-absolute"
-                                alt="Поиск" />
-                        </div>
+        </section>
 
-                        <div class="scroll_container">
+        <x-climate.composer />
 
-                        </div>
-                    </div>
+    </main>
 
-                    <!-- Индикатор статуса сервиса -->
-                    <div class="mb-3">
-                        <div class="status-indicator text-center p-2 rounded">
-                            <small id="statusIndicator" class="text-muted">
-                                <i class="fas fa-circle me-1"></i>Загрузка...
-                            </small>
-                        </div>
-                    </div>
+</div>
 
-                    <div class="input_button px-5 py-2 d-flex justify-content-center align-items-center gap-4">
-                        <img class="input_img" src="{{ asset('icons/question.png') }}">
-                        <a href="https://clck.ru/3Rti7j" target="_blank"><input class="p-0 m-0" type="button" name="help" value="Помощь" /></a>
-                    </div>
-                </div>
-            </aside>
-
-            <!-- Основной контент -->
-            <main id="mainContent" class="main col-md-9 col-lg-10 p-4 position-relative">
-
-            <header class="d-flex justify-content-between align-items-center mb-4">
-                    <a href="#">
-                        <img class="logo" src="{{ asset('icons/logo.png') }}" alt="Лого" />
-                    </a>
-                    <div class="d-flex justify-content-center align-items-center gap-3">
-
-
-                        <!-- Выпадающее меню профиля -->
-                        <div class="dropdown" id="profile-fixed">
-
-                        <a style="color: black;" href="#" class="d-flex align-items-center dropdown-toggle" id="userProfileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <img class="header_img" src="{{ asset('icons/account.png') }}" alt="Личный кабинет" />
-                            </a>
-
-                            <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="userProfileDropdown">
-                                <li class="px-3 py-2">
-                                    <span class="text-muted small">Здравствуйте,</span>
-                                    <div class="fw-bold text-dark">{{ auth()->user()->name ?? 'Пользователь' }}</div>
-                                </li>
-                                <li><hr class="dropdown-divider m-0"></li>
-                                <li>
-                                    <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
-                                        @csrf
-                                    </form>
-                                    <a href="#"
-                                       onclick="event.preventDefault(); document.getElementById('logout-form').submit();"
-                                       class="dropdown-item text-danger fw-medium">
-                                        <i class="fas fa-sign-out-alt me-2"></i>Выйти
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </header>
-
-                <!-- Область чата -->
-                <div class="chat-container h-100">
-                    <div id="chatMessages" class="chat-messages mb-4">
-                        <!-- Сообщения будут добавляться здесь динамически -->
-                        <div class="welcome-message text-center mb-4">
-                            <h2 class="welcome_header mb-3">Информационная система для рекомендации адаптационных мероприятий к изменениям климата</h2>
-                            <p class="welcome_text">Введите в поле запроса описание климатического риска, с которым вы столкнулись.<br>Примеры корректных формулировок:<br>
-                                «Частые подтопления реки Тура в Тобольском районе весной»<br>
-                                «Учащение засух в южных районах Ишимского района»<br>
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Индикатор загрузки -->
-                    <div id="loading" class="text-center py-4 d-none">
-                        <div class="d-flex flex-column align-items-center">
-                            <div class="spinner-border text-primary mb-2" role="status">
-                                <span class="visually-hidden">Загрузка...</span>
-                            </div>
-                            <p class="text-muted mb-1">Обрабатываем запрос...</p>
-                            <small class="text-muted">Это может занять время</small>
-                        </div>
-                    </div>
-
-                    <!-- Область ввода -->
-                    <div class="chat-input-container position-relative">
-                        <div class="position-relative">
-                        <textarea
-                            id="question"
-                            name="question"
-                            class="form-control prompt-field"
-                            placeholder="Введите ваш запрос о климатических рисках..."
-                            rows="3"
-                        ></textarea>
-
-                            <div class="prompt_buttons position-absolute">
-                                <button
-                                    id="submitBtn"
-                                    type="button"
-                                    class="btn p-0 m-0"
-                                    title="Отправить"
-                                    disabled
-                                >
-                                    <img src="{{ asset('icons/submit.png') }}" alt="Отправить" />
-                                </button>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <!-- Ошибка -->
-                    <div id="error" class="alert alert-danger mt-3 d-none">
-                        <div class="d-flex align-items-start">
-                            <i class="fas fa-exclamation-triangle me-3 mt-1"></i>
-                            <div class="flex-grow-1">
-                                <h6 class="alert-heading mb-2">Произошла ошибка</h6>
-                                <p id="errorMessage" class="mb-2"></p>
-                                <button onclick="retryLastRequest()" class="btn btn-sm btn-outline-danger">
-                                    <i class="fas fa-redo me-1"></i>Попробовать снова
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </main>
-        </div>
-    </div>
-
-    <!-- Подключаем библиотеки -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="{{ asset('js/climate.js') }}"></script>
 @endsection
+
+
+@push('scripts')
+<script
+    type="module"
+    src="{{ asset('js/climate/index.js') }}"></script>
+@endpush

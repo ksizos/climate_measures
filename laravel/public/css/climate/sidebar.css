@@ -1,0 +1,209 @@
+.logo {
+    height: 40px;
+    width: auto;
+}
+
+.header_img {
+    height: 40px;
+    width: 40px;
+    cursor: pointer;
+}
+
+.sidebar {
+    background-color: #f9f9f9;
+    box-sizing: border-box;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.aside_img {
+    height: 20px;
+    cursor: pointer;
+}
+
+.search {
+    height: 40px;
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 0 4px 0 rgba(0, 0, 0, 0.25);
+    box-sizing: border-box;
+    font-size: 16px;
+}
+
+.search_icon {
+    right: 15px;
+    bottom: 10px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.scroll_container {
+    overflow-y: auto;
+    max-height: 60vh;
+}
+
+.scroll_header {
+    font-size: 18px;
+    font-weight: 500;
+    color: #333333;
+}
+
+.fade_text {
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: 16px;
+    font-weight: 300;
+    position: relative;
+    cursor: pointer;
+    padding: 8px 0;
+}
+
+.fade_text:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.fade_text::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 50px;
+    height: 100%;
+    background: linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0) 0%,
+        #f9f9f9 100%
+    );
+    display: block;
+}
+
+.input_img {
+    width: 25px;
+    height: 25px;
+}
+
+.input_button {
+    height: 56px;
+    background-color: #fff;
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0px 2px 2px 0px rgba(0, 0, 0, 0.25);
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+input[type="button"] {
+    background-color: #fff;
+    border: none;
+    font-size: 16px;
+    font-weight: bold;
+    color: #6e6e6e;
+}
+
+/* Стили для режима корзины */
+.trash-mode-header {
+    background: linear-gradient(135deg, #fff5f5 0%, #ffebee 100%);
+    border: 1px solid #ffcdd2;
+    margin-bottom: 15px;
+}
+
+.trash-mode-item {
+    border: 1px solid #ffcdd2 !important;
+    background-color: #fff8f9 !important;
+    transition: all 0.2s ease;
+}
+
+.trash-mode-item:hover {
+    background-color: #ffebee !important;
+    transform: translateX(5px);
+}
+
+.delete-btn-container {
+    display: none;
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+}
+
+.trash-mode-item .delete-btn-container {
+    display: block;
+}
+
+/* Анимация появления кнопок удаления */
+.conversation-item {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.conversation-item:hover {
+    transform: translateX(5px);
+}
+
+/* Стили для кнопки удаления */
+.delete-conversation {
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.2s ease;
+}
+
+.conversation-item:hover .delete-conversation {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Скрытый sidebar */
+/* Полностью скрываем sidebar */
+.sidebar-hidden {
+    width: 60px !important;
+    min-width: 60px !important;
+    max-width: 60px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    overflow: hidden;
+}
+
+.sidebar-hidden .scroll_container,
+.sidebar-hidden .search,
+.sidebar-hidden .search_icon,
+.sidebar-hidden .status-indicator,
+.sidebar-hidden .input_button,
+.sidebar-hidden .scroll_header {
+    display: none !important;
+}
+.sidebar-hidden .bin-icon,
+.sidebar-hidden .new-chat-btn {
+    display: none !important;
+}
+
+/* Статус индикатор */
+.status-indicator {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.btn-danger.rounded-circle {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    padding: 0;
+    min-width: auto;
+}
+
+.bin-icon:hover {
+    transform: scale(1.1);
+    transition: transform 0.2s ease;
+}
+
+.exit-trash-mode {
+    padding: 2px 8px;
+    font-size: 0.8rem;
+}

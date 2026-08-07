@@ -1,0 +1,42 @@
+/* Поле ввода */
+.chat-input-container {
+    background: white;
+    padding: 20px;
+    border-top: 1px solid #e9ecef;
+    flex-shrink: 0; /* Предотвращаем сжатие */
+}
+
+.prompt-field {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0px 2px 7px 0px rgba(0, 0, 0, 0.1);
+    font-size: 16px;
+    resize: none;
+    padding: 16px 60px 16px 16px;
+    min-height: 80px;
+}
+
+.prompt-field:focus {
+    outline: none;
+    box-shadow: 0px 2px 7px 0px rgba(0, 123, 255, 0.25);
+}
+
+.prompt_buttons {
+    right: 15px;
+    bottom: 15px;
+}
+
+.prompt_buttons img {
+    height: 40px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.prompt_buttons img:hover {
+    transform: scale(1.1);
+}
+
+.prompt_buttons img:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

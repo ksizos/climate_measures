@@ -1,59 +1,69 @@
-<header class="d-flex justify-content-end align-items-center px-4 py-2">
+<header class="d-flex justify-content-end align-items-center">
 
     <div
-        class="d-flex align-items-center justify-content-center dropdown profile-dropdown"
+        class="profile-dropdown"
         id="profile-fixed">
 
-        <a
-            href="#"
-            class="d-flex align-items-center justify-content-center header_text dropdown-toggle gap-3 py-2 text-decoration-none"
-            id="userProfileDropdown"
-            role="button"
-            aria-expanded="false"
-            onclick="event.preventDefault();">
+        <button
+            type="button"
+            class="profile-trigger"
+            aria-label="Открыть профиль">
+
             <img
-                class="header_img"
+                class="profile-avatar"
                 src="{{ asset('icons/account.svg') }}"
-                alt="Личный кабинет" />
-
-            <div class="d-flex flex-column">
-                <p class="dropdown_name p-0 m-0">
-                    {{ auth()->user()->full_name ?? 'Пользователь' }}
-                </p>
-
-                <p class="dropdown_position p-0 m-0">
-                    {{ auth()->user()->position ?? 'Сотрудник' }}
-                </p>
-            </div>
+                alt="Личный кабинет">
 
             <img
                 class="profile-arrow"
                 src="{{ asset('icons/arrow.svg') }}"
-                alt="Развернуть">
-        </a>
+                alt="">
+        </button>
 
 
-        <ul
-            id="profile-info"
-            class="dropdown-menu dropdown-menu-end shadow-sm p-0 m-0"
-            aria-labelledby="userProfileDropdown">
-            <li>
+        <div class="profile-panel">
+
+            <div class="profile-panel__user">
+                <p class="profile-panel__name">
+                    {{ auth()->user()->full_name ?? 'Пользователь' }}
+                </p>
+
+                <p class="profile-panel__position">
+                    {{ auth()->user()->position ?? 'Сотрудник' }}
+                </p>
+            </div>
+
+
+            <div class="profile-panel__menu">
+
+                <a
+                    href="#"
+                    class="profile-panel__item">
+                    Профиль
+                </a>
+
+                <a
+                    href="#"
+                    class="profile-panel__item">
+                    Настройки
+                </a>
+
                 <form
                     id="logout-form"
                     action="{{ route('logout') }}"
-                    method="POST"
-                    class="d-none">
+                    method="POST">
                     @csrf
+
+                    <button
+                        type="submit"
+                        class="profile-panel__item profile-panel__item--logout">
+                        Выйти
+                    </button>
                 </form>
 
-                <a
-                    onclick="event.preventDefault(); document.getElementById('logout-form').submit();"
-                    class="dropdown-item text-danger fw-medium pt-1 m-0">
-                    <i class="fas fa-sign-out-alt"></i>
-                    Выйти
-                </a>
-            </li>
-        </ul>
+            </div>
+
+        </div>
 
     </div>
 

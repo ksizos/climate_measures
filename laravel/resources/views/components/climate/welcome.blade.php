@@ -1,30 +1,29 @@
 @php
 $examples = [
 [
-'text' => 'Учащение штормовых явлений',
+'text' => 'Последствия ливней на юге Тюменской области',
 'icon' => 'icons/storm.svg',
 ],
 [
-'text' => 'Риск лесных пожаров',
+'text' => 'Риск возникновения лесных пожаров в ХМАО',
 'icon' => 'icons/wildfire.svg',
 ],
 [
-'text' => 'Экстремальные температуры',
+'text' => 'Адаптационные меры для высоких температур в ЯНАО',
 'icon' => 'icons/heat.svg',
 ],
 [
-'text' => 'Повышение риска весенних паводков',
+'text' => 'Риск весенних паводков в бассейне Иртыша',
 'icon' => 'icons/flood.svg',
 ],
 [
-'text' => 'Учащение засух в южных районах',
+'text' => 'Вероятность учащения засух в Тобольске',
 'icon' => 'icons/drought.svg',
 ],
 ];
 
 $randomExamples = collect($examples)->shuffle()->take(4);
 @endphp
-
 
 <div id="welcomeMessage" class="welcome-message text-center">
 

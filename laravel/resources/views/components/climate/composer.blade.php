@@ -1,10 +1,10 @@
-<div class="chat-input-container position-relative">
-    <div class="position-relative">
+<div class="chat-input-container d-flex flex-column">
+    <div class="chat-input position-relative">
         <textarea
             id="question"
             name="question"
             class="form-control prompt-field"
-            placeholder="Введите ваш запрос о климатических рисках..."
+            placeholder="Опишите климатический риск или задайте вопрос..."
             rows="3"></textarea>
 
         <div class="prompt_buttons position-absolute">
@@ -14,9 +14,9 @@
                 class="btn p-0 m-0"
                 title="Отправить"
                 disabled>
-                <img src="{{ asset('icons/submit.png') }}" alt="Отправить" />
+                <img src="{{ asset('icons/submit.svg') }}" alt="Отправить" />
             </button>
         </div>
     </div>
-
+    <div class="muted_back"></div>
 </div>

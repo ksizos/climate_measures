@@ -27,28 +27,6 @@ export function scrollToElement(element) {
     });
 }
 
-// Показать загрузку
-export function showLoading() {
-    const loadingElement = document.getElementById("loading");
-
-    if (!loadingElement) {
-        return;
-    }
-
-    loadingElement.classList.remove("d-none");
-
-    scrollToElement(loadingElement);
-}
-
-// Скрыть загрузку
-export function hideLoading() {
-    const loadingElement = document.getElementById("loading");
-
-    if (loadingElement) {
-        loadingElement.classList.add("d-none");
-    }
-}
-
 // Показать ошибку
 export function showError(message) {
     const errorDiv = document.getElementById("error");
@@ -79,19 +57,22 @@ export function hideError() {
 
 // Временное уведомление
 export function showTemporaryMessage(message, type = "info") {
-    const chatMessages = document.getElementById("chatMessages");
+    const climateMain = document.querySelector(".climate-main");
 
-    if (!chatMessages) {
+    if (!climateMain) {
         return;
     }
 
     const messageDiv = document.createElement("div");
 
-    messageDiv.className = `alert alert-${type} temporary-message fade-in mb-3`;
+    messageDiv.className = `alert alert-${type} temporary-message`;
 
-    messageDiv.innerHTML = `<i class="fas fa-info-circle me-2"></i>${escapeHtml(message)}`;
+    messageDiv.innerHTML = `
+        <i class="fas fa-info-circle me-2"></i>
+        ${escapeHtml(message)}
+    `;
 
-    chatMessages.insertBefore(messageDiv, chatMessages.firstChild);
+    climateMain.appendChild(messageDiv);
 
     setTimeout(() => {
         messageDiv.classList.add("fade-out");
@@ -119,11 +100,17 @@ export function showWelcome() {
     const welcome = document.getElementById("welcomeMessage");
     const chatContainer = document.querySelector(".chat-container");
 
-    if (welcome) {
-        welcome.classList.remove("d-none");
-    }
-
     if (chatContainer) {
         chatContainer.classList.add("d-none");
+    }
+
+    if (welcome) {
+        welcome.classList.remove("d-none");
+
+        welcome.classList.remove("welcome-appear");
+
+        void welcome.offsetWidth;
+
+        welcome.classList.add("welcome-appear");
     }
 }

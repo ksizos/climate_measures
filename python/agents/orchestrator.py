@@ -210,6 +210,7 @@ orchestrator = FunctionAgent(
             "agent_outputs": [],
         }
     },
+    streaming=False,
 )
 
 async def process_query_multiagent(

@@ -3,11 +3,11 @@ from llama_index.core.agent.workflow import FunctionAgent
 from core.config import (
     LLM_SPECIALIZED_AGENT_MODEL,
     AGENT_MAX_TOKENS,
-    AGENT_TEMPERATURE
+    AGENT_TEMPERATURE,
 )
 
 from infrastructure.llm.providers.provider_registry import (
-    get_specialized_llm
+    get_specialized_llm,
 )
 
 from agents.tools import (
@@ -19,15 +19,14 @@ from agents.tools import (
     statistics_answer_tool,
 )
 
-# Пока все специализированные агенты используют один и тот же LLM.
-# Отдельная переменная оставлена, чтобы сохранить текущую логику проекта
-# и возможность позже назначить специализированным агентам другую модель.
+
 sub_agent_llm = get_specialized_llm(
     model=LLM_SPECIALIZED_AGENT_MODEL,
     temperature=AGENT_TEMPERATURE,
     max_tokens=AGENT_MAX_TOKENS,
     function_calling=True,
 )
+
 
 adaptation_agent = FunctionAgent(
     system_prompt=(
@@ -38,6 +37,7 @@ adaptation_agent = FunctionAgent(
     ),
     llm=sub_agent_llm,
     tools=[adaptation_answer_tool],
+    streaming=False,
 )
 
 
@@ -50,7 +50,9 @@ npa_agent = FunctionAgent(
     ),
     llm=sub_agent_llm,
     tools=[npa_answer_tool],
+    streaming=False,
 )
+
 
 method_docs_agent = FunctionAgent(
     system_prompt=(
@@ -61,6 +63,7 @@ method_docs_agent = FunctionAgent(
     ),
     llm=sub_agent_llm,
     tools=[method_docs_answer_tool],
+    streaming=False,
 )
 
 
@@ -73,6 +76,7 @@ statistics_agent = FunctionAgent(
     ),
     llm=sub_agent_llm,
     tools=[statistics_answer_tool],
+    streaming=False,
 )
 
 
@@ -84,6 +88,7 @@ internet_resources_agent = FunctionAgent(
     ),
     llm=sub_agent_llm,
     tools=[internet_resources_answer_tool],
+    streaming=False,
 )
 
 
@@ -95,4 +100,5 @@ dialog_agent = FunctionAgent(
     ),
     llm=sub_agent_llm,
     tools=[dialog_answer_tool],
+    streaming=False,
 )

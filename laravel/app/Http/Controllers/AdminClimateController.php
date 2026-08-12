@@ -14,8 +14,14 @@ class AdminClimateController extends Controller
     // Главная страница админки
     public function index()
     {
-        $cases = ClimateCase::orderBy('created_at', 'desc')->paginate(20);
-        return view('admin.climate', compact('cases'));
+        $cases = ClimateCase::query()
+            ->orderBy('id', 'desc')
+            ->get();
+
+        return view(
+            'admin.index',
+            compact('cases')
+        );
     }
 
     private string $apiBaseUrl;

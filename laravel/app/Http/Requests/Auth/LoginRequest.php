@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 class LoginRequest extends FormRequest
 {
     /**
-     * Determine if the user is authorized to make this request.
+     * Разрешение выполнения запроса.
      */
     public function authorize(): bool
     {
@@ -20,76 +20,109 @@ class LoginRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * Правила валидации.
      */
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string'],
-            'password' => ['required', 'string'],
+            'name' => [
+                'required',
+                'string',
+            ],
+
+            'password' => [
+                'required',
+                'string',
+            ],
         ];
     }
+
+    /**
+     * Сообщения валидации.
+     */
     public function messages(): array
     {
         return [
-            'name.required' => 'Поле логина обязательно для заполнения',
-            'name.string' => 'Логин должен быть строкой',
-            'password.required' => 'Поле пароля обязательно для заполнения',
-            'password.string' => 'Пароль должен быть строкой',
+            'name.required' =>
+            'Поле логина обязательно для заполнения.',
+
+            'name.string' =>
+            'Логин должен быть строкой.',
+
+            'password.required' =>
+            'Поле пароля обязательно для заполнения.',
+
+            'password.string' =>
+            'Пароль должен быть строкой.',
         ];
     }
+
     /**
-     * Attempt to authenticate the request's credentials.
-     *
-     * @throws \Illuminate\Validation\ValidationException
+     * Попытка авторизации.
      */
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
 
-        // Изменено: используем 'name' вместо 'email'
-        if (! Auth::attempt($this->only('name', 'password'), $this->boolean('remember'))) {
-            RateLimiter::hit($this->throttleKey());
+        $credentials = [
+            'name' => $this->string('name')->toString(),
+            'password' => $this->input('password'),
+        ];
+
+        $remember = $this->boolean('remember');
+
+        if (!Auth::attempt($credentials, $remember)) {
+            RateLimiter::hit(
+                $this->throttleKey(),
+            );
 
             throw ValidationException::withMessages([
-                'name' => 'Неверный логин или пароль',
+                'name' => 'Неверный логин или пароль.',
             ]);
         }
 
-        RateLimiter::clear($this->throttleKey());
+        RateLimiter::clear(
+            $this->throttleKey(),
+        );
     }
 
     /**
-     * Ensure the login request is not rate limited.
-     *
-     * @throws \Illuminate\Validation\ValidationException
+     * Проверка ограничения количества попыток.
      */
     public function ensureIsNotRateLimited(): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
+        if (
+            !RateLimiter::tooManyAttempts(
+                $this->throttleKey(),
+                5,
+            )
+        ) {
             return;
         }
 
         event(new Lockout($this));
 
-        $seconds = RateLimiter::availableIn($this->throttleKey());
+        $seconds = RateLimiter::availableIn(
+            $this->throttleKey(),
+        );
 
         throw ValidationException::withMessages([
-            'name' => trans('auth.throttle', [ // Изменено с 'email' на 'name'
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
-            ]),
+            'name' =>
+            "Слишком много попыток входа. Повторите через {$seconds} сек.",
         ]);
     }
 
     /**
-     * Get the rate limiting throttle key for the request.
+     * Ключ rate limiter.
      */
     public function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->string('name')).'|'.$this->ip());
+        return Str::transliterate(
+            Str::lower(
+                $this->string('name')->toString(),
+            )
+                . '|'
+                . $this->ip(),
+        );
     }
-
 }

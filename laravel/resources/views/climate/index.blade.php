@@ -2,6 +2,7 @@
 
 @section('title', 'Климатический консультант')
 
+
 @push('styles')
 <link
     rel="stylesheet"
@@ -13,22 +14,23 @@
 
 <div class="climate-app">
 
-    <x-climate.sidebar
-        :conversations="$conversations" />
+    @include('components.climate.sidebar', [
+    'conversations' => $conversations
+    ])
 
     <main class="climate-main">
 
-        <x-climate.header />
+        @include('components.climate.header')
 
         <section class="climate-content">
 
-            <x-climate.welcome />
+            @include('components.climate.welcome')
 
-            <x-climate.messages />
+            @include('components.climate.messages')
 
         </section>
 
-        <x-climate.composer />
+        @include('components.climate.composer')
 
     </main>
 
@@ -40,5 +42,6 @@
 @push('scripts')
 <script
     type="module"
-    src="{{ asset('js/climate/index.js') }}"></script>
+    src="{{ asset('js/climate/index.js') }}">
+</script>
 @endpush

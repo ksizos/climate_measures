@@ -24,20 +24,26 @@ class ClimateController extends Controller
      *
      * @return \Illuminate\Contracts\View\View|\Illuminate\Http\RedirectResponse
      */
+
     public function showInterface()
     {
-        // Если пользователь администратор - перенаправляем в админ-панель
-        if (auth()->user()->role === 'admin') {
+        $user = auth()->user();
+
+        // Администратор работает только через админ-панель
+        if ($user->role === 'admin') {
             return redirect()->route('admin.climate');
         }
 
-        // Обычный пользователь
-        $conversations = auth()->user()->conversations()
+        $conversations = $user
+            ->conversations()
             ->orderBy('last_interaction_at', 'desc')
             ->take(10)
             ->get();
 
-        return view('climate', compact('conversations'));
+        return view(
+            'climate.index',
+            compact('conversations')
+        );
     }
 
     /**

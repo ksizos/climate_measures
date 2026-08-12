@@ -12,15 +12,19 @@ use Illuminate\View\View;
 class AuthenticatedSessionController extends Controller
 {
     /**
-     * Display the login view.
+     * Показ страницы авторизации.
      */
-    public function create(): View
+    public function create(): View|RedirectResponse
     {
+        if (Auth::check()) {
+            return $this->redirectAuthenticatedUser();
+        }
+
         return view('auth.login');
     }
 
     /**
-     * Handle an incoming authentication request.
+     * Авторизация пользователя.
      */
     public function store(LoginRequest $request): RedirectResponse
     {
@@ -28,11 +32,11 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('climate.index', absolute: false));
+        return $this->redirectAuthenticatedUser();
     }
 
     /**
-     * Destroy an authenticated session.
+     * Выход пользователя.
      */
     public function destroy(Request $request): RedirectResponse
     {
@@ -42,6 +46,20 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerateToken();
 
-        return redirect('/');
+        return redirect()->route('login');
+    }
+
+    /**
+     * Перенаправление после авторизации.
+     */
+    private function redirectAuthenticatedUser(): RedirectResponse
+    {
+        $user = Auth::user();
+
+        if ($user && $user->role === 'admin') {
+            return redirect()->route('admin.climate');
+        }
+
+        return redirect()->route('climate.index');
     }
 }

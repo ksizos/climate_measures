@@ -1,41 +1,108 @@
-<x-guest-layout>
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+@extends('layouts.app')
 
-    <form method="POST" action="{{ route('login') }}">
+@section('title', 'Авторизация')
+
+@push('styles')
+<link
+    rel="stylesheet"
+    href="{{ asset('css/auth/index.css') }}">
+@endpush
+
+
+@section('content')
+
+<div class="auth_block d-flex align-items-center justify-content-center">
+    <form сlass="auth_panel shadow-sm px-2 py-1"
+        method="POST"
+        action="{{ route('login.store') }}">
         @csrf
 
-        <!-- Username Field -->
+        <!-- Username -->
         <div>
-            <x-input-label for="name" :value="__('Логин')" />
-            <x-text-input id="name" class="block mt-1 w-full" type="text" name="name" :value="old('name')" required autofocus autocomplete="username" />
-            <x-input-error :messages="$errors->get('name')" class="mt-2" />
+            <label for="name">
+                {{ __('Логин') }}
+            </label>
+
+            <input
+                id="name"
+                class="block mt-1 w-full"
+                type="text"
+                name="name"
+                value="{{ old('name') }}"
+                required
+                autofocus
+                autocomplete="username">
+
+            @error('name')
+            <div class="mt-2">
+                {{ $message }}
+            </div>
+            @enderror
         </div>
+
 
         <!-- Password -->
         <div class="mt-4">
-            <x-input-label for="password" :value="__('Пароль')" />
 
-            <x-text-input id="password" class="block mt-1 w-full"
-                          type="password"
-                          name="password"
-                          required autocomplete="current-password" />
+            <label for="password">
+                {{ __('Пароль') }}
+            </label>
 
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
+            <input
+                id="password"
+                class="block mt-1 w-full"
+                type="password"
+                name="password"
+                required
+                autocomplete="current-password">
+
+            @error('password')
+            <div class="mt-2">
+                {{ $message }}
+            </div>
+            @enderror
+
         </div>
+
 
         <!-- Remember Me -->
         <div class="block mt-4">
-            <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" name="remember">
-                <span class="ms-2 text-sm text-gray-600">{{ __('Не выходить из системы') }}</span>
+
+            <label
+                for="remember_me"
+                class="inline-flex items-center">
+                <input
+                    id="remember_me"
+                    type="checkbox"
+                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                    name="remember"
+                    value="1"
+                    {{ old('remember') ? 'checked' : '' }}>
+
+                <span class="ms-2 text-sm text-gray-600">
+                    {{ __('Не выходить из системы') }}
+                </span>
             </label>
+
         </div>
 
+
         <div class="flex items-center justify-end mt-4">
-            <x-primary-button class="ms-3">
+
+            <button
+                type="submit"
+                class="ms-3">
                 {{ __('Войти') }}
-            </x-primary-button>
+            </button>
+
         </div>
+
     </form>
-</x-guest-layout>
+</div>
+
+@endsection
+
+
+@push('scripts')
+<script src="{{ asset('js/auth/index.js') }}"></script>
+@endpush

@@ -1,5 +1,7 @@
-@import "./fonts.css";
-@import "./variables.css";
+@import "../base/fonts.css";
+@import "../base/variables.css";
+@import "../base/body.css";
+
 @import "./layout.css";
 @import "./header.css";
 @import "./sidebar.css";

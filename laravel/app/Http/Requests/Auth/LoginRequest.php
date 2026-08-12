@@ -11,23 +11,18 @@ use Illuminate\Validation\ValidationException;
 
 class LoginRequest extends FormRequest
 {
-    /**
-     * Разрешение выполнения запроса.
-     */
     public function authorize(): bool
     {
         return true;
     }
 
-    /**
-     * Правила валидации.
-     */
     public function rules(): array
     {
         return [
-            'name' => [
+            'email' => [
                 'required',
                 'string',
+                'email',
             ],
 
             'password' => [
@@ -37,64 +32,61 @@ class LoginRequest extends FormRequest
         ];
     }
 
-    /**
-     * Сообщения валидации.
-     */
     public function messages(): array
     {
         return [
-            'name.required' =>
-            'Поле логина обязательно для заполнения.',
+            'email.required' =>
+            'Введите адрес электронной почты.',
 
-            'name.string' =>
-            'Логин должен быть строкой.',
+            'email.email' =>
+            'Введите корректный адрес электронной почты.',
 
             'password.required' =>
-            'Поле пароля обязательно для заполнения.',
-
-            'password.string' =>
-            'Пароль должен быть строкой.',
+            'Введите пароль.',
         ];
     }
 
-    /**
-     * Попытка авторизации.
-     */
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
 
         $credentials = [
-            'name' => $this->string('name')->toString(),
-            'password' => $this->input('password'),
+            'email' => trim(
+                $this->string('email')->toString()
+            ),
+
+            'password' =>
+            $this->input('password'),
         ];
 
-        $remember = $this->boolean('remember');
+        $remember =
+            $this->boolean('remember');
 
-        if (!Auth::attempt($credentials, $remember)) {
+        if (!Auth::attempt(
+            $credentials,
+            $remember
+        )) {
             RateLimiter::hit(
-                $this->throttleKey(),
+                $this->throttleKey()
             );
 
             throw ValidationException::withMessages([
-                'name' => 'Неверный логин или пароль.',
+                'email' =>
+                'Неверная электронная почта или пароль.',
             ]);
         }
 
         RateLimiter::clear(
-            $this->throttleKey(),
+            $this->throttleKey()
         );
     }
 
-    /**
-     * Проверка ограничения количества попыток.
-     */
     public function ensureIsNotRateLimited(): void
     {
         if (
             !RateLimiter::tooManyAttempts(
                 $this->throttleKey(),
-                5,
+                5
             )
         ) {
             return;
@@ -102,27 +94,27 @@ class LoginRequest extends FormRequest
 
         event(new Lockout($this));
 
-        $seconds = RateLimiter::availableIn(
-            $this->throttleKey(),
-        );
+        $seconds =
+            RateLimiter::availableIn(
+                $this->throttleKey()
+            );
 
         throw ValidationException::withMessages([
-            'name' =>
+            'email' =>
             "Слишком много попыток входа. Повторите через {$seconds} сек.",
         ]);
     }
 
-    /**
-     * Ключ rate limiter.
-     */
     public function throttleKey(): string
     {
+        $email = trim(
+            $this->string('email')->toString()
+        );
+
         return Str::transliterate(
-            Str::lower(
-                $this->string('name')->toString(),
-            )
+            Str::lower($email)
                 . '|'
-                . $this->ip(),
+                . $this->ip()
         );
     }
 }

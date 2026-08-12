@@ -1,6 +1,8 @@
 @extends('layouts.app')
 
+
 @section('title', 'Авторизация')
+
 
 @push('styles')
 <link
@@ -11,98 +13,108 @@
 
 @section('content')
 
-<div class="auth_block d-flex align-items-center justify-content-center">
-    <form сlass="auth_panel shadow-sm px-2 py-1"
-        method="POST"
-        action="{{ route('login.store') }}">
-        @csrf
+<div
+    class="auth_block d-flex align-items-center justify-content-center">
+    <div class="auth_panel shadow-sm p-4 d-flex align-items-center justify-content-center flex-column">
+        <img
+            class="logo mb-4"
+            src="{{ asset('icons/logo.svg') }}"
+            alt="Лого" />
+        <p class="auth_header m-0 p-0">Вход в информационную систему</p>
+        <p class="auth_text_muted p-0 mb-4">Введите данные учётной записи для продолжения работы</p>
+        <form
+            class="auth_form"
+            method="POST"
+            action="{{ route('login.store') }}">
+            @csrf
+            {{-- Логин --}}
+            <div>
+                <label
+                    for="email"
+                    class="form-label">
+                    {{ __('Логин') }}
+                </label>
 
-        <!-- Username -->
-        <div>
-            <label for="name">
-                {{ __('Логин') }}
-            </label>
-
-            <input
-                id="name"
-                class="block mt-1 w-full"
-                type="text"
-                name="name"
-                value="{{ old('name') }}"
-                required
-                autofocus
-                autocomplete="username">
-
-            @error('name')
-            <div class="mt-2">
-                {{ $message }}
+                <input
+                    id="email"
+                    class="form-control"
+                    type="email"
+                    name="email"
+                    value="{{ old('email') }}"
+                    required
+                    autofocus
+                    autocomplete="email"
+                    placeholder="Введите email">
+                @error('email')
+                <div class="text-danger mt-2">
+                    {{ $message }}
+                </div>
+                @enderror
             </div>
-            @enderror
-        </div>
 
-
-        <!-- Password -->
-        <div class="mt-4">
-
-            <label for="password">
-                {{ __('Пароль') }}
-            </label>
-
-            <input
-                id="password"
-                class="block mt-1 w-full"
-                type="password"
-                name="password"
-                required
-                autocomplete="current-password">
-
-            @error('password')
-            <div class="mt-2">
-                {{ $message }}
+            {{-- Пароль --}}
+            <div class="mt-4">
+                <label
+                    for="password"
+                    class="form-label">
+                    {{ __('Пароль') }}
+                </label>
+                <input
+                    id="password"
+                    class="form-control"
+                    type="password"
+                    name="password"
+                    required
+                    autocomplete="current-password"
+                    placeholder="Введите пароль">
+                @error('password')
+                <div class="text-danger mt-2">
+                    {{ $message }}
+                </div>
+                @enderror
             </div>
-            @enderror
 
-        </div>
+            {{-- Запомнить пользователя --}}
 
-
-        <!-- Remember Me -->
-        <div class="block mt-4">
-
-            <label
-                for="remember_me"
-                class="inline-flex items-center">
+            <div class="form-check mt-4">
                 <input
                     id="remember_me"
+                    class="form-check-input"
                     type="checkbox"
-                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
                     name="remember"
                     value="1"
                     {{ old('remember') ? 'checked' : '' }}>
 
-                <span class="ms-2 text-sm text-gray-600">
+                <label
+                    for="remember_me"
+                    class="form-check-label">
                     {{ __('Не выходить из системы') }}
-                </span>
-            </label>
+                </label>
+            </div>
 
-        </div>
+            {{-- Вход --}}
 
+            <div
+                class="w-100 d-flex align-items-center justify-content-center mt-4">
+                <button
+                    type="submit"
+                    class="sumbit_button w-100 py-2">
+                    {{ __('ВОЙТИ') }}
+                </button>
 
-        <div class="flex items-center justify-end mt-4">
+            </div>
 
-            <button
-                type="submit"
-                class="ms-3">
-                {{ __('Войти') }}
-            </button>
-
-        </div>
-
-    </form>
+        </form>
+    </div>
 </div>
+
+<img src="{{ asset('icons/auth_background.svg') }}" class="auth_background" alt="">
 
 @endsection
 
 
 @push('scripts')
-<script src="{{ asset('js/auth/index.js') }}"></script>
+<script
+    src="{{ asset('js/auth/index.js') }}">
+</script>
 @endpush

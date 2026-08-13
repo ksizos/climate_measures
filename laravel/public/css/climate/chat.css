@@ -154,6 +154,10 @@
     margin: 0;
 }
 
+.message-content p {
+    margin-bottom: 0 !important;
+}
+
 .markdown-content {
     display: flex;
     flex-direction: column !important;

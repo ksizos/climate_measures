@@ -6,11 +6,16 @@ import { scrollToBottom, scrollToElement, hideWelcome } from "./ui.js";
 
 import { exportToDocx, exportToExcel } from "./export.js";
 
-import { sendApprovedMeasure, addApproveButtonsToTables } from "./measure.js";
+import { addApproveButtonsToTables } from "./measure.js";
 
 import { loadConversations } from "./conversations.js";
 
 let currentRequestController = null;
+
+let currentRequestId = null;
+
+let currentAnswerElement = null;
+
 let isGenerating = false;
 
 /**
@@ -26,8 +31,8 @@ export function initChat() {
     }
 
     /**
-     * Автоматическое изменение высоты textarea
-     * + управление доступностью кнопки.
+     * Автоматическая высота textarea
+     * + состояние submit.
      */
     questionInput.addEventListener("input", function () {
         this.style.height = "auto";
@@ -40,7 +45,7 @@ export function initChat() {
     });
 
     /**
-     * Ctrl + Enter / Cmd + Enter
+     * Ctrl + Enter / Cmd + Enter.
      */
     questionInput.addEventListener("keydown", (event) => {
         if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -53,11 +58,12 @@ export function initChat() {
     });
 
     /**
-     * Обычная отправка / остановка запроса.
+     * Отправка / остановка.
      */
     submitBtn.addEventListener("click", () => {
         if (isGenerating) {
             stopGeneration();
+
             return;
         }
 
@@ -68,69 +74,175 @@ export function initChat() {
 }
 
 /**
- * Переключение состояния кнопки:
- *
- * submit.svg
- *     ↓
- * stop.svg
- *     ↓
- * submit.svg
+ * Уникальный ID конкретной генерации.
+ */
+function createRequestId() {
+    if (
+        typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID === "function"
+    ) {
+        return crypto.randomUUID();
+    }
+
+    return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+}
+
+/**
+ * submit.svg <-> stop.svg
  */
 function setGeneratingState(generating) {
     const submitBtn = document.getElementById("submitBtn");
 
-    const submitIcon = submitBtn?.querySelector("img");
-
     const questionInput = document.getElementById("question");
 
-    if (!submitBtn || !submitIcon) {
+    if (!submitBtn) {
         return;
     }
 
     isGenerating = generating;
 
     if (generating) {
-        // Кнопка STOP должна оставаться кликабельной.
+        /*
+         * Кнопка STOP должна оставаться
+         * доступной во время генерации.
+         */
         submitBtn.disabled = false;
-
-        submitIcon.src = "/icons/stop.svg";
-
-        submitIcon.alt = "Остановить";
-
-        submitBtn.title = "Остановить генерацию";
 
         submitBtn.classList.add("is-generating");
 
+        submitBtn.title = "Остановить генерацию";
+
         return;
     }
-
-    submitIcon.src = "/icons/submit.svg";
-
-    submitIcon.alt = "Отправить";
-
-    submitBtn.title = "Отправить";
 
     submitBtn.classList.remove("is-generating");
 
+    submitBtn.title = "Отправить";
+
     submitBtn.disabled = !questionInput?.value.trim();
 }
-
 /**
- * Остановка текущего клиентского запроса.
+ * Отправляет серверу команду STOP.
  *
- * Пока останавливается fetch Laravel.
- * Python отдельно не прерываем.
+ * Ошибки здесь намеренно игнорируются:
+ * пользователь не должен видеть
+ * уведомлений при остановке.
  */
-function stopGeneration() {
-    if (!isGenerating || !currentRequestController) {
+async function cancelServerGeneration(requestId) {
+    if (!requestId) {
         return;
     }
 
-    currentRequestController.abort();
+    const csrfToken = document.querySelector(
+        'meta[name="csrf-token"]',
+    )?.content;
+
+    try {
+        await fetch("/climate/cancel", {
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json",
+
+                "X-CSRF-TOKEN": csrfToken,
+
+                "X-Requested-With": "XMLHttpRequest",
+            },
+
+            body: JSON.stringify({
+                request_id: requestId,
+            }),
+        });
+    } catch {
+        /*
+         * Ошибка остановки
+         * не выводится пользователю.
+         */
+    }
 }
 
 /**
- * Очистка сообщений чата.
+ * Немедленная остановка генерации.
+ */
+async function stopGeneration() {
+    if (!isGenerating) {
+        return;
+    }
+
+    /*
+     * Запоминаем значения именно
+     * отменяемого запроса.
+     */
+    const requestId = currentRequestId;
+
+    const controller = currentRequestController;
+
+    const answerElement = currentAnswerElement;
+
+    /*
+     * Сразу помечаем запрос
+     * остановленным.
+     *
+     * Это важно, чтобы старый запрос
+     * больше не считался активным
+     * на клиенте.
+     */
+    currentRequestId = null;
+
+    currentRequestController = null;
+
+    currentAnswerElement = null;
+
+    /*
+     * Сразу возвращаем кнопку
+     * в состояние submit.
+     */
+    setGeneratingState(false);
+
+    /*
+     * Вместо удаления сообщения
+     * показываем статус остановки.
+     */
+    if (answerElement) {
+        const messageContent = answerElement.querySelector(".message-content");
+
+        if (messageContent) {
+            messageContent.classList.remove("processing-content");
+
+            messageContent.innerHTML = `
+                <span class="generation-stopped">
+                    Генерация остановлена
+                </span>
+            `;
+        }
+    }
+
+    /*
+     * Сначала отправляем серверу
+     * настоящую команду отмены.
+     *
+     * ВАЖНО:
+     * browser fetch /ask пока ещё
+     * не прерываем, чтобы Laravel
+     * успел выполнить /cancel.
+     */
+    await cancelServerGeneration(requestId);
+
+    /*
+     * После отправки STOP
+     * разрываем старый /ask.
+     */
+    if (controller) {
+        controller.abort();
+    }
+
+    const questionInput = document.getElementById("question");
+
+    questionInput?.focus();
+}
+
+/**
+ * Очистка сообщений.
  */
 export function clearChatMessages() {
     const chatMessages = document.getElementById("chatMessages");
@@ -143,10 +255,7 @@ export function clearChatMessages() {
 }
 
 /**
- * Добавление пары:
- *
- * пользователь
- * ассистент
+ * Добавление вопроса + ответа.
  */
 export function addQuestionAnswerPair(question, answer) {
     const chatMessages = document.getElementById("chatMessages");
@@ -159,7 +268,7 @@ export function addQuestionAnswerPair(question, answer) {
     }
 
     /*
-     * Сообщение пользователя
+     * Пользователь.
      */
     const questionDiv = document.createElement("div");
 
@@ -174,7 +283,7 @@ export function addQuestionAnswerPair(question, answer) {
     chatMessages.appendChild(questionDiv);
 
     /*
-     * Сообщение ассистента
+     * Ассистент.
      */
     const answerDiv = document.createElement("div");
 
@@ -182,26 +291,18 @@ export function addQuestionAnswerPair(question, answer) {
 
     chatMessages.appendChild(answerDiv);
 
-    /*
-     * Markdown.
-     *
-     * ВАЖНО:
-     * markdown-content присутствует сразу.
-     */
     const markdownHTML = marked.parse(answer || "");
 
     const safeHTML = addTargetBlankToLinks(markdownHTML);
 
     answerDiv.innerHTML = `
-        <div class="message-content markdown-content">
+        <div
+            class="message-content markdown-content"
+        >
             ${safeHTML}
         </div>
     `;
 
-    /*
-     * Если это уже сохранённый ответ,
-     * сразу добавляем действия для таблиц.
-     */
     setupAnswerActions(answerDiv);
 
     scrollToBottom();
@@ -213,11 +314,7 @@ export function addQuestionAnswerPair(question, answer) {
 }
 
 /**
- * Добавляет к ответу:
- *
- * - кнопки DOCX / Excel;
- * - кнопки одобрения мероприятий;
- * - обработчики экспорта.
+ * Действия над таблицами ответа.
  */
 function setupAnswerActions(answerDiv) {
     if (!answerDiv) {
@@ -236,9 +333,6 @@ function setupAnswerActions(answerDiv) {
         return;
     }
 
-    /*
-     * Не создаём кнопки повторно.
-     */
     if (answerDiv.querySelector(".export-buttons")) {
         return;
     }
@@ -248,36 +342,29 @@ function setupAnswerActions(answerDiv) {
     exportButtonsDiv.className = "export-buttons mt-2 d-flex gap-2";
 
     exportButtonsDiv.innerHTML = `
-    <button
-        type="button"
-        class="btn btn-sm btn-outline-primary export-docx"
-        title="Скачать DOCX"
-    >
-        <i class="fas fa-file-word me-1"></i>
-        DOCX
-    </button>
+        <button
+            type="button"
+            class="btn btn-sm btn-outline-primary export-docx"
+            title="Скачать DOCX"
+        >
+            <i class="fas fa-file-word me-1"></i>
+            DOCX
+        </button>
 
-    <button
-        type="button"
-        class="btn btn-sm btn-outline-success export-excel"
-        title="Скачать Excel"
-    >
-        <i class="fas fa-file-excel me-1"></i>
-        Excel
-    </button>
-`;
+        <button
+            type="button"
+            class="btn btn-sm btn-outline-success export-excel"
+            title="Скачать Excel"
+        >
+            <i class="fas fa-file-excel me-1"></i>
+            Excel
+        </button>
+    `;
 
     answerDiv.appendChild(exportButtonsDiv);
 
-    /*
-     * Добавляем кнопки подтверждения
-     * адаптационных мероприятий.
-     */
     addApproveButtonsToTables(answerDiv);
 
-    /*
-     * DOCX
-     */
     const exportDocxBtn = answerDiv.querySelector(".export-docx");
 
     if (exportDocxBtn) {
@@ -295,9 +382,6 @@ function setupAnswerActions(answerDiv) {
         });
     }
 
-    /*
-     * Excel
-     */
     const exportExcelBtn = answerDiv.querySelector(".export-excel");
 
     if (exportExcelBtn) {
@@ -320,10 +404,6 @@ function setupAnswerActions(answerDiv) {
  * Отправка сообщения.
  */
 async function sendMessage() {
-    /*
-     * Не разрешаем отправить второй запрос,
-     * пока выполняется текущий.
-     */
     if (isGenerating) {
         return;
     }
@@ -344,10 +424,6 @@ async function sendMessage() {
 
     state.lastQuestion = question;
 
-    /*
-     * Добавляем вопрос и пустой
-     * assistant-message.
-     */
     const pairElements = addQuestionAnswerPair(question, "");
 
     if (!pairElements.questionDiv || !pairElements.answerDiv) {
@@ -355,17 +431,24 @@ async function sendMessage() {
     }
 
     /*
-     * Спиннер.
-     *
-     * ВАЖНО:
-     * markdown-content НЕ удаляем.
+     * Текущее незавершённое
+     * сообщение ассистента.
      */
+    currentAnswerElement = pairElements.answerDiv;
+
     pairElements.answerDiv.innerHTML = `
         <div
-            class="message-content markdown-content processing-content"
+            class="
+                message-content
+                markdown-content
+                processing-content
+            "
         >
             <span
-                class="spinner-border spinner-border-sm"
+                class="
+                    spinner-border
+                    spinner-border-sm
+                "
                 role="status"
                 aria-hidden="true"
             ></span>
@@ -378,26 +461,40 @@ async function sendMessage() {
      * Очищаем textarea.
      */
     questionInput.value = "";
+
     questionInput.style.height = "auto";
 
     /*
-     * Создаём контроллер отмены.
+     * Уникальный запрос.
      */
-    currentRequestController = new AbortController();
+    const requestId = createRequestId();
+
+    currentRequestId = requestId;
 
     /*
-     * submit.svg -> stop.svg
+     * AbortController относится
+     * только к этому запросу.
      */
+    const controller = new AbortController();
+
+    currentRequestController = controller;
+
     setGeneratingState(true);
 
     try {
         const payload = {
             question: question,
+
+            request_id: requestId,
         };
 
         if (state.currentConversationId) {
             payload.conversation_id = state.currentConversationId;
         }
+
+        const csrfToken = document.querySelector(
+            'meta[name="csrf-token"]',
+        )?.content;
 
         const response = await fetch("/climate/ask", {
             method: "POST",
@@ -405,23 +502,30 @@ async function sendMessage() {
             headers: {
                 "Content-Type": "application/json",
 
-                "X-CSRF-TOKEN": document.querySelector(
-                    'meta[name="csrf-token"]',
-                ).content,
+                "X-CSRF-TOKEN": csrfToken,
 
                 "X-Requested-With": "XMLHttpRequest",
             },
 
             body: JSON.stringify(payload),
 
-            signal: currentRequestController.signal,
+            signal: controller.signal,
         });
+
+        /*
+         * Если запрос уже остановлен,
+         * ничего больше не рендерим.
+         */
+        if (currentRequestId !== requestId) {
+            return;
+        }
 
         const data = await response.json();
 
-        /*
-         * Успешный ответ Laravel.
-         */
+        if (currentRequestId !== requestId) {
+            return;
+        }
+
         if (data.success) {
             if (data.conversation_id) {
                 state.currentConversationId = data.conversation_id;
@@ -431,20 +535,10 @@ async function sendMessage() {
                 pairElements.answerDiv.querySelector(".message-content");
 
             if (messageContent) {
-                /*
-                 * Спиннер больше не нужен.
-                 */
                 messageContent.classList.remove("processing-content");
 
-                /*
-                 * Явно гарантируем наличие
-                 * markdown-content.
-                 */
                 messageContent.classList.add("markdown-content");
 
-                /*
-                 * Рендерим Markdown.
-                 */
                 const markdownHTML = marked.parse(data.answer || "");
 
                 const safeHTML = addTargetBlankToLinks(markdownHTML);
@@ -452,26 +546,15 @@ async function sendMessage() {
                 messageContent.innerHTML = safeHTML;
             }
 
-            /*
-             * Теперь .markdown-content
-             * точно существует,
-             * поэтому таблицы будут найдены.
-             */
             setupAnswerActions(pairElements.answerDiv);
 
             scrollToElement(pairElements.answerDiv);
 
-            /*
-             * Обновляем историю диалогов.
-             */
             loadConversations();
 
             return;
         }
 
-        /*
-         * Laravel вернул success=false.
-         */
         const messageContent =
             pairElements.answerDiv.querySelector(".message-content");
 
@@ -488,24 +571,24 @@ async function sendMessage() {
         }
     } catch (err) {
         /*
-         * Пользователь нажал STOP.
+         * STOP.
          *
-         * Никакого текста
-         * "Генерация остановлена".
-         *
-         * Незавершённый assistant-message
-         * просто удаляется.
+         * Без текста,
+         * без alert,
+         * без сообщения.
          */
         if (err.name === "AbortError") {
-            pairElements.answerDiv?.remove();
-
             return;
         }
 
         /*
-         * Остальные ошибки показываем
-         * прямо внутри assistant-message.
+         * Если это уже не текущий
+         * request — игнорируем.
          */
+        if (currentRequestId !== requestId) {
+            return;
+        }
+
         const messageContent =
             pairElements.answerDiv?.querySelector(".message-content");
 
@@ -523,22 +606,26 @@ async function sendMessage() {
         }
     } finally {
         /*
-         * Всегда возвращаем:
+         * Очень важно:
          *
-         * stop.svg -> submit.svg
+         * старый остановленный request
+         * не должен сбросить состояние
+         * уже нового запроса.
          */
-        currentRequestController = null;
+        if (currentRequestId === requestId) {
+            currentRequestId = null;
 
-        setGeneratingState(false);
+            currentRequestController = null;
+
+            currentAnswerElement = null;
+
+            setGeneratingState(false);
+        }
     }
 }
 
 /**
- * Карточки примеров на welcome-screen.
- *
- * При клике:
- * - помещаем запрос в textarea;
- * - сразу отправляем.
+ * Карточки примеров.
  */
 document.querySelectorAll(".example_card").forEach((card) => {
     card.addEventListener("click", () => {

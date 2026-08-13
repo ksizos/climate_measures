@@ -10,14 +10,24 @@ class Message extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['conversation_id', 'question', 'answer', 'interaction_time'];
+
+    protected $fillable = [
+        'conversation_id',
+        'question',
+        'answer',
+        'interaction_time',
+    ];
+
 
     protected $casts = [
         'interaction_time' => 'datetime',
     ];
 
+
     public function conversation(): BelongsTo
     {
-        return $this->belongsTo(Conversation::class);
+        return $this->belongsTo(
+            Conversation::class
+        );
     }
 }

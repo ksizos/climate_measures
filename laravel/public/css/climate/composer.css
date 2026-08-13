@@ -76,10 +76,56 @@
     color: var(--color-primary-dark);
 }
 
-#submitBtn.is-generating img {
-    transform: none;
+/* =========================
+   SUBMIT / STOP
+   ========================= */
+
+#submitBtn {
+    border: none;
+    background: transparent;
+}
+
+#submitBtn .submit-icon,
+#submitBtn .stop-icon {
+    display: block;
+    height: 40px;
+
+    cursor: pointer;
+
+    transition: transform 0.2s ease;
+}
+
+/* В обычном режиме */
+
+#submitBtn .submit-icon {
+    display: block;
+}
+
+#submitBtn .stop-icon {
+    display: none;
+}
+
+/* Во время генерации */
+
+#submitBtn.is-generating .submit-icon {
+    display: none;
+}
+
+#submitBtn.is-generating .stop-icon {
+    display: block;
+}
+
+#submitBtn:not(:disabled) img:hover {
+    transform: scale(1.1);
 }
 
 #submitBtn.is-generating img:hover {
     transform: scale(1.05);
+}
+
+.generation-stopped {
+    font-size: 14px;
+    font-weight: 500;
+
+    color: var(--color-text-muted);
 }

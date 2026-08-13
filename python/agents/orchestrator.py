@@ -1,3 +1,5 @@
+import asyncio
+
 from llama_index.core.agent.workflow import FunctionAgent
 from llama_index.core.workflow import Context
 
@@ -10,30 +12,41 @@ from agents.specialized import (
     statistics_agent,
 )
 
-from prompts.orchestrator import ORCHESTRATOR_SYSTEM_PROMPT
-
 from agents.state import (
     _get_previous_agent_outputs,
     _save_agent_result,
 )
 
+from prompts.orchestrator import (
+    ORCHESTRATOR_SYSTEM_PROMPT,
+)
+
 from core.config import (
     LLM_ORCHESTRATOR_MODEL,
     ORCHESTRATOR_TEMPERATURE,
-    ORCHESTRATOR_MAX_TOKENS
-)
-from infrastructure.llm.providers.provider_registry import (
-    get_orchestrator_llm
+    ORCHESTRATOR_MAX_TOKENS,
 )
 
-# Пока сохраняем текущую логику:
-# специализированные агенты и оркестратор используют один LLM-клиент.
+from infrastructure.llm.providers.provider_registry import (
+    get_orchestrator_llm,
+)
+
+
+# =============================================================================
+# LLM оркестратора
+# =============================================================================
+
 orchestrator_llm = get_orchestrator_llm(
     model=LLM_ORCHESTRATOR_MODEL,
     temperature=ORCHESTRATOR_TEMPERATURE,
     max_tokens=ORCHESTRATOR_MAX_TOKENS,
     function_calling=True,
 )
+
+
+# =============================================================================
+# Формирование сообщения специализированному агенту
+# =============================================================================
 
 async def _build_agent_user_message(
     ctx: Context,
@@ -48,15 +61,25 @@ async def _build_agent_user_message(
     - история диалога;
     - результаты агентов, уже вызванных оркестратором.
     """
-    previous_outputs = await _get_previous_agent_outputs(ctx)
+
+    previous_outputs = await _get_previous_agent_outputs(
+        ctx
+    )
 
     parts = [
-        f"Текущий запрос пользователя:\n{prompt.strip()}"
+        (
+            "Текущий запрос пользователя:\n"
+            f"{prompt.strip()}"
+        )
     ]
 
-    if conversation_history and conversation_history.strip():
+    if (
+        conversation_history
+        and conversation_history.strip()
+    ):
         parts.append(
-            f"История диалога:\n{conversation_history.strip()}"
+            "История диалога:\n"
+            f"{conversation_history.strip()}"
         )
 
     if previous_outputs:
@@ -75,22 +98,37 @@ async def _build_agent_user_message(
     return "\n\n".join(parts)
 
 
+# =============================================================================
+# Специализированные агенты
+# =============================================================================
+
 async def call_adaptation_agent(
     ctx: Context,
     prompt: str,
     conversation_history: str = "",
 ) -> str:
-    """Запускает агента по адаптационным мероприятиям."""
+    """
+    Запускает агента по адаптационным мероприятиям.
+    """
+
     user_msg = await _build_agent_user_message(
         ctx=ctx,
         prompt=prompt,
         conversation_history=conversation_history,
     )
 
-    result = await adaptation_agent.run(user_msg=user_msg)
+    result = await adaptation_agent.run(
+        user_msg=user_msg
+    )
+
     text = str(result)
 
-    await _save_agent_result(ctx, "adaptation_agent", text)
+    await _save_agent_result(
+        ctx,
+        "adaptation_agent",
+        text,
+    )
+
     return text
 
 
@@ -99,17 +137,28 @@ async def call_npa_agent(
     prompt: str,
     conversation_history: str = "",
 ) -> str:
-    """Запускает агента по нормативно-правовым актам."""
+    """
+    Запускает агента по нормативно-правовым актам.
+    """
+
     user_msg = await _build_agent_user_message(
         ctx=ctx,
         prompt=prompt,
         conversation_history=conversation_history,
     )
 
-    result = await npa_agent.run(user_msg=user_msg)
+    result = await npa_agent.run(
+        user_msg=user_msg
+    )
+
     text = str(result)
 
-    await _save_agent_result(ctx, "npa_agent", text)
+    await _save_agent_result(
+        ctx,
+        "npa_agent",
+        text,
+    )
+
     return text
 
 
@@ -118,17 +167,29 @@ async def call_method_docs_agent(
     prompt: str,
     conversation_history: str = "",
 ) -> str:
-    """Запускает агента по методическим и аналитическим документам."""
+    """
+    Запускает агента по методическим
+    и аналитическим документам.
+    """
+
     user_msg = await _build_agent_user_message(
         ctx=ctx,
         prompt=prompt,
         conversation_history=conversation_history,
     )
 
-    result = await method_docs_agent.run(user_msg=user_msg)
+    result = await method_docs_agent.run(
+        user_msg=user_msg
+    )
+
     text = str(result)
 
-    await _save_agent_result(ctx, "method_docs_agent", text)
+    await _save_agent_result(
+        ctx,
+        "method_docs_agent",
+        text,
+    )
+
     return text
 
 
@@ -137,17 +198,28 @@ async def call_statistics_agent(
     prompt: str,
     conversation_history: str = "",
 ) -> str:
-    """Запускает статистического агента."""
+    """
+    Запускает статистического агента.
+    """
+
     user_msg = await _build_agent_user_message(
         ctx=ctx,
         prompt=prompt,
         conversation_history=conversation_history,
     )
 
-    result = await statistics_agent.run(user_msg=user_msg)
+    result = await statistics_agent.run(
+        user_msg=user_msg
+    )
+
     text = str(result)
 
-    await _save_agent_result(ctx, "statistics_agent", text)
+    await _save_agent_result(
+        ctx,
+        "statistics_agent",
+        text,
+    )
+
     return text
 
 
@@ -156,14 +228,20 @@ async def call_internet_resources_agent(
     prompt: str,
     conversation_history: str = "",
 ) -> str:
-    """Запускает агента по интернет-ресурсам."""
+    """
+    Запускает агента по интернет-ресурсам.
+    """
+
     user_msg = await _build_agent_user_message(
         ctx=ctx,
         prompt=prompt,
         conversation_history=conversation_history,
     )
 
-    result = await internet_resources_agent.run(user_msg=user_msg)
+    result = await internet_resources_agent.run(
+        user_msg=user_msg
+    )
+
     text = str(result)
 
     await _save_agent_result(
@@ -171,6 +249,7 @@ async def call_internet_resources_agent(
         "internet_resources_agent",
         text,
     )
+
     return text
 
 
@@ -179,19 +258,34 @@ async def call_dialog_agent(
     prompt: str,
     conversation_history: str = "",
 ) -> str:
-    """Запускает общего диалогового агента."""
+    """
+    Запускает общего диалогового агента.
+    """
+
     user_msg = await _build_agent_user_message(
         ctx=ctx,
         prompt=prompt,
         conversation_history=conversation_history,
     )
 
-    result = await dialog_agent.run(user_msg=user_msg)
+    result = await dialog_agent.run(
+        user_msg=user_msg
+    )
+
     text = str(result)
 
-    await _save_agent_result(ctx, "dialog_agent", text)
+    await _save_agent_result(
+        ctx,
+        "dialog_agent",
+        text,
+    )
+
     return text
 
+
+# =============================================================================
+# Оркестратор
+# =============================================================================
 
 orchestrator = FunctionAgent(
     system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
@@ -213,17 +307,27 @@ orchestrator = FunctionAgent(
     streaming=False,
 )
 
+
+# =============================================================================
+# Основная точка запуска multi-agent pipeline
+# =============================================================================
+
 async def process_query_multiagent(
     user_question: str,
     context_history: str | None = None,
 ) -> str:
     """
-    Обрабатывает пользовательский запрос через агент-оркестратор.
+    Обрабатывает пользовательский запрос
+    через агент-оркестратор.
     """
+
     normalized_question = user_question.strip()
 
     if not normalized_question:
-        return "Ошибка: пожалуйста, введите ваш запрос."
+        return (
+            "Ошибка: пожалуйста, "
+            "введите ваш запрос."
+        )
 
     normalized_history = (
         context_history.strip()
@@ -245,15 +349,26 @@ async def process_query_multiagent(
     print(user_msg)
     print("=" * 80 + "\n")
 
-    # Для каждого пользовательского запроса создается новый Context.
-    # Это необходимо, чтобы результаты агентов разных запросов
-    # не смешивались.
+    # Для каждого пользовательского запроса
+    # создаётся отдельный Context.
+    #
+    # Это не позволяет результатам агентов
+    # разных пользовательских запросов
+    # смешиваться между собой.
     ctx = Context(orchestrator)
 
     handler = orchestrator.run(
         user_msg=user_msg,
         ctx=ctx,
     )
-    result = await handler
 
-    return str(result)
+    try:
+        result = await handler
+
+        return str(result)
+
+    except asyncio.CancelledError:
+        print("\n" + "=" * 80)
+        print("⛔ ГЕНЕРАЦИЯ ОСТАНОВЛЕНА")
+        print("=" * 80 + "\n")
+        raise

@@ -91,9 +91,12 @@ class ClimateController extends Controller
         );
 
         $request->validate([
-            'question' => 'required|string|min:3|max:1000',
+            'question' =>
+            'required|string|min:3|max:1000',
             'conversation_id' =>
             'nullable|exists:conversations,id,user_id,' . auth()->id(),
+            'request_id' =>
+            'required|string|max:100',
         ]);
 
         try {
@@ -129,9 +132,14 @@ class ClimateController extends Controller
             }
 
             Log::info('Отправка запроса к Climate API', [
-                'question' => $request->question,
-                'conversation_id' => $conversation_id,
-                'context_length' => strlen($context)
+                'question' =>
+                $request->question,
+                'conversation_id' =>
+                $conversation_id,
+                'context' =>
+                $context,
+                'request_id' =>
+                $request->request_id,
             ]);
 
             $response = Http::connectTimeout(10)
@@ -144,9 +152,17 @@ class ClimateController extends Controller
                 ->post(
                     $this->apiBaseUrl . '/ask',
                     [
-                        'question' => $request->question,
-                        'conversation_id' => $conversation_id,
-                        'context' => $context,
+                        'question' =>
+                        $request->question,
+
+                        'conversation_id' =>
+                        $conversation_id,
+
+                        'context' =>
+                        $context,
+
+                        'request_id' =>
+                        $request->request_id,
                     ]
                 );
 
@@ -198,6 +214,55 @@ class ClimateController extends Controller
         }
     }
 
+    /**
+     * Остановить текущую генерацию.
+     */
+    public function cancelGeneration(
+        Request $request
+    ) {
+        $request->validate([
+            'request_id' =>
+            'required|string|max:100',
+        ]);
+
+        try {
+            Http::connectTimeout(2)
+                ->timeout(5)
+                ->post(
+                    $this->apiBaseUrl
+                        . '/cancel/'
+                        . urlencode(
+                            $request->request_id
+                        )
+                );
+
+            return response()->json([
+                'success' => true,
+            ]);
+        } catch (\Exception $e) {
+
+            /*
+         * Для STOP пользователю ошибка не показывается.
+         *
+         * Клиентская генерация уже будет остановлена
+         * через AbortController.
+         */
+            Log::warning(
+                'Не удалось отправить отмену в Climate API',
+                [
+                    'request_id' =>
+                    $request->request_id,
+
+                    'message' =>
+                    $e->getMessage(),
+                ]
+            );
+
+            return response()->json([
+                'success' => true,
+            ]);
+        }
+    }
     /**
      * Проверить статус сервиса
      */
@@ -251,10 +316,18 @@ class ClimateController extends Controller
      */
     public function deleteConversation($id)
     {
-        $conversation = Conversation::where('user_id', auth()->id())->findOrFail($id);
+        $conversation = Conversation::where(
+            'user_id',
+            auth()->id()
+        )->findOrFail($id);
+
+
         $conversation->delete();
 
-        return response()->json(['success' => true]);
+
+        return response()->json([
+            'success' => true,
+        ]);
     }
 
     /**

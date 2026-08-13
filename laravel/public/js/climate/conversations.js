@@ -12,7 +12,16 @@ import { clearChatMessages, addQuestionAnswerPair } from "./chat.js";
 
 import { escapeHtml } from "./utils.js";
 
-// Начать новый диалог
+let conversationsCache = [];
+
+let currentSort = "new";
+
+let conversationPendingDelete = null;
+
+/* =========================================================
+   НОВЫЙ ДИАЛОГ
+   ========================================================= */
+
 export async function startNewConversation() {
     if (state.isTrashMode) {
         state.isTrashMode = false;
@@ -35,7 +44,10 @@ export async function startNewConversation() {
     scrollToBottom();
 }
 
-// Загрузка конкретного диалога
+/* =========================================================
+   ЗАГРУЗКА ДИАЛОГА
+   ========================================================= */
+
 export async function loadConversation(id) {
     try {
         hideError();
@@ -44,22 +56,21 @@ export async function loadConversation(id) {
 
         const data = await response.json();
 
-        if (!data.success) {
+        if (!response.ok || !data.success) {
             showError("Не удалось загрузить диалог");
+
             return;
         }
 
-        // Запоминаем текущий открытый диалог
         state.currentConversationId = id;
 
-        // Обновляем active в sidebar
         updateActiveConversation();
 
         hideWelcome();
 
         clearChatMessages();
 
-        if (data.conversation && data.conversation.messages) {
+        if (data.conversation && Array.isArray(data.conversation.messages)) {
             data.conversation.messages.forEach((pair) => {
                 addQuestionAnswerPair(pair.question, pair.answer);
             });
@@ -71,16 +82,11 @@ export async function loadConversation(id) {
     }
 }
 
-// Удаление диалога
-export async function deleteConversation(id) {
-    if (
-        !confirm(
-            "Вы уверены, что хотите удалить этот диалог? Это действие нельзя отменить.",
-        )
-    ) {
-        return;
-    }
+/* =========================================================
+   УДАЛЕНИЕ ДИАЛОГА
+   ========================================================= */
 
+export async function deleteConversation(id) {
     try {
         const csrfToken = document.querySelector('meta[name="csrf-token"]');
 
@@ -92,38 +98,63 @@ export async function deleteConversation(id) {
 
                 "X-Requested-With": "XMLHttpRequest",
 
+                Accept: "application/json",
+
                 "Content-Type": "application/json",
             },
         });
 
-        const data = await response.json();
+        let data = null;
 
-        if (data.success) {
-            if (String(state.currentConversationId) === String(id)) {
-                state.currentConversationId = null;
+        try {
+            data = await response.json();
+        } catch {
+            data = {};
+        }
 
-                clearChatMessages();
-
-                showWelcome();
-            }
-
-            await loadConversations();
-        } else {
+        if (!response.ok || !data.success) {
             showError(
                 "Не удалось удалить диалог: " +
-                    (data.error || "Неизвестная ошибка"),
+                    (data.error || data.message || "Неизвестная ошибка"),
             );
+
+            return false;
         }
+
+        /*
+         * Если удалили диалог,
+         * который сейчас открыт.
+         */
+        if (String(state.currentConversationId) === String(id)) {
+            state.currentConversationId = null;
+
+            clearChatMessages();
+
+            showWelcome();
+        }
+
+        /*
+         * После удаления заново
+         * загружаем историю.
+         */
+        await loadConversations();
+
+        return true;
     } catch (error) {
         showError("Ошибка при удалении диалога: " + error.message);
+
+        return false;
     }
 }
 
-// Переключение режима корзины
+/* =========================================================
+   РЕЖИМ КОРЗИНЫ
+   ========================================================= */
+
 export function toggleTrashMode() {
     state.isTrashMode = !state.isTrashMode;
 
-    loadConversations();
+    animateSortedConversations();
 
     const binIcon = document.querySelector(".bin-icon");
 
@@ -134,16 +165,160 @@ export function toggleTrashMode() {
     }
 }
 
-// Загрузка списка диалогов
+/* =========================================================
+   АНИМАЦИЯ СОРТИРОВКИ
+   ========================================================= */
+
+function animateSortedConversations() {
+    const scrollContainer = document.querySelector(".scroll_container");
+
+    if (!scrollContainer) {
+        renderSortedConversations();
+
+        return;
+    }
+
+    scrollContainer.classList.add("is-sorting");
+
+    setTimeout(() => {
+        renderSortedConversations();
+
+        requestAnimationFrame(() => {
+            scrollContainer.classList.remove("is-sorting");
+        });
+    }, 180);
+}
+
+/* =========================================================
+   ДАТА
+   ========================================================= */
+
+/*
+ * Парсинг:
+ *
+ * 13.08.2026 14:35
+ */
+function parseRussianDate(dateString) {
+    if (!dateString) {
+        return null;
+    }
+
+    const [datePart, timePart] = dateString.split(" ");
+
+    if (!datePart || !timePart) {
+        return null;
+    }
+
+    const [day, month, year] = datePart.split(".");
+
+    const [hours, minutes] = timePart.split(":");
+
+    if (
+        !day ||
+        !month ||
+        !year ||
+        hours === undefined ||
+        minutes === undefined
+    ) {
+        return null;
+    }
+
+    const date = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hours),
+        Number(minutes),
+    );
+
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+
+    return date;
+}
+
+/* =========================================================
+   СОРТИРОВКА
+   ========================================================= */
+
+function sortConversations(conversations) {
+    const sorted = [...conversations];
+
+    sorted.sort((a, b) => {
+        const dateA = parseRussianDate(a.last_interaction_at);
+
+        const dateB = parseRussianDate(b.last_interaction_at);
+
+        /*
+         * Нет даты у обоих.
+         */
+        if (!dateA && !dateB) {
+            return 0;
+        }
+
+        /*
+         * Диалог без даты
+         * всегда вниз.
+         */
+        if (!dateA) {
+            return 1;
+        }
+
+        if (!dateB) {
+            return -1;
+        }
+
+        /*
+         * Сначала старые.
+         */
+        if (currentSort === "old") {
+            return dateA.getTime() - dateB.getTime();
+        }
+
+        /*
+         * По умолчанию:
+         * сначала новые.
+         */
+        return dateB.getTime() - dateA.getTime();
+    });
+
+    return sorted;
+}
+
+function renderSortedConversations() {
+    const sorted = sortConversations(conversationsCache);
+
+    renderConversations(sorted);
+}
+
+/* =========================================================
+   ЗАГРУЗКА ИСТОРИИ
+   ========================================================= */
+
 export async function loadConversations() {
     try {
-        const response = await fetch("/climate/conversations");
+        const response = await fetch("/climate/conversations", {
+            headers: {
+                Accept: "application/json",
+
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        });
 
         const data = await response.json();
 
-        if (data.success) {
-            renderConversations(data.conversations);
+        if (!response.ok || !data.success) {
+            showError("Не удалось загрузить историю диалогов");
+
+            return;
         }
+
+        conversationsCache = Array.isArray(data.conversations)
+            ? data.conversations
+            : [];
+
+        renderSortedConversations();
     } catch (error) {
         console.error("Ошибка загрузки диалогов:", error);
 
@@ -151,7 +326,10 @@ export async function loadConversations() {
     }
 }
 
-// Отображение списка диалогов
+/* =========================================================
+   РЕНДЕР ИСТОРИИ
+   ========================================================= */
+
 function renderConversations(conversations) {
     const scrollContainer = document.querySelector(".scroll_container");
 
@@ -159,69 +337,55 @@ function renderConversations(conversations) {
         return;
     }
 
-    const today = new Date();
+    const now = new Date();
 
-    const yesterday = new Date();
+    const todayStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+    );
 
-    yesterday.setDate(today.getDate() - 1);
+    const yesterdayStart = new Date(todayStart);
 
-    function parseRussianDate(dateString) {
-        if (!dateString) {
-            return null;
-        }
-
-        const [datePart, timePart] = dateString.split(" ");
-
-        if (!datePart || !timePart) {
-            return null;
-        }
-
-        const [day, month, year] = datePart.split(".");
-
-        const [hours, minutes] = timePart.split(":");
-
-        if (!day || !month || !year || !hours || !minutes) {
-            return null;
-        }
-
-        return new Date(year, month - 1, day, hours, minutes);
-    }
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
     const todayConvs = [];
+
     const yesterdayConvs = [];
+
     const olderConvs = [];
 
     conversations.forEach((conv) => {
         const interactionDate = parseRussianDate(conv.last_interaction_at);
 
-        const now = new Date();
-
         if (!interactionDate) {
             olderConvs.push(conv);
+
             return;
         }
 
-        const isToday =
-            interactionDate.getDate() === now.getDate() &&
-            interactionDate.getMonth() === now.getMonth() &&
-            interactionDate.getFullYear() === now.getFullYear();
-
-        const isYesterday =
-            interactionDate.getDate() === yesterday.getDate() &&
-            interactionDate.getMonth() === yesterday.getMonth() &&
-            interactionDate.getFullYear() === yesterday.getFullYear();
-
-        if (isToday) {
+        if (interactionDate >= todayStart) {
             todayConvs.push(conv);
-        } else if (isYesterday) {
-            yesterdayConvs.push(conv);
-        } else {
-            olderConvs.push(conv);
+
+            return;
         }
+
+        if (interactionDate >= yesterdayStart) {
+            yesterdayConvs.push(conv);
+
+            return;
+        }
+
+        olderConvs.push(conv);
     });
 
     let html = "";
 
+    /*
+     * Режим старой корзины,
+     * если он пока остаётся
+     * в проекте.
+     */
     if (state.isTrashMode) {
         html += `
             <div
@@ -234,73 +398,100 @@ function renderConversations(conversations) {
 
                 <button
                     type="button"
-                    style="border: none;"
                     class="btn btn-sm btn-outline-secondary exit-trash-mode"
                     title="Выйти из режима удаления"
+                    style="border: none;"
                 >
                     <i class="fas fa-times"></i>
-                    x
                 </button>
             </div>
         `;
     }
 
-    if (todayConvs.length > 0) {
-        html += `
-            <h2 class="scroll_header mt-2 mb-0 me-0 ms-0">
-                Сегодня
-            </h2>
-        `;
+    /*
+     * Сначала старые:
+     *
+     * Ранее
+     * Вчера
+     * Сегодня
+     */
+    if (currentSort === "old") {
+        html += renderConversationGroup("Ранее", olderConvs, "mt-2");
 
-        todayConvs.forEach((conv) => {
-            html += createConversationHTML(conv);
-        });
-    }
+        html += renderConversationGroup("Вчера", yesterdayConvs, "mt-3");
 
-    if (yesterdayConvs.length > 0) {
-        html += `
-            <h2 class="scroll_header mt-3 mb-0 me-0 ms-0">
-                Вчера
-            </h2>
-        `;
+        html += renderConversationGroup("Сегодня", todayConvs, "mt-3");
+    } else {
+        /*
+         * Сначала новые:
+         *
+         * Сегодня
+         * Вчера
+         * Ранее
+         */
 
-        yesterdayConvs.forEach((conv) => {
-            html += createConversationHTML(conv);
-        });
-    }
+        html += renderConversationGroup("Сегодня", todayConvs, "mt-2");
 
-    if (olderConvs.length > 0) {
-        html += `
-            <h2 class="scroll_header mt-3 mb-0 me-0 ms-0">
-                Ранее
-            </h2>
-        `;
+        html += renderConversationGroup("Вчера", yesterdayConvs, "mt-3");
 
-        olderConvs.forEach((conv) => {
-            html += createConversationHTML(conv);
-        });
+        html += renderConversationGroup("Ранее", olderConvs, "mt-3");
     }
 
     scrollContainer.innerHTML =
         html ||
         `
-            <p class="text-muted text-center mt-3">
+            <p
+                class="text-muted text-center mt-3"
+            >
                 Нет диалогов
             </p>
         `;
 
-    /*
-     * На случай перерендера sidebar.
-     *
-     * createConversationHTML уже добавляет active,
-     * но дополнительно синхронизируем DOM.
-     */
     updateActiveConversation();
 
-    // Обработчики клика по диалогам
+    bindConversationClickHandlers();
+
+    bindTrashModeHandlers();
+
+    updateDeleteButtonsVisibility();
+}
+
+/* =========================================================
+   ГРУППА ДИАЛОГОВ
+   ========================================================= */
+
+function renderConversationGroup(title, conversations, marginClass) {
+    if (conversations.length === 0) {
+        return "";
+    }
+
+    let html = `
+        <h2
+            class="scroll_header ${marginClass} mb-0 me-0 ms-0"
+        >
+            ${escapeHtml(title)}
+        </h2>
+    `;
+
+    conversations.forEach((conv) => {
+        html += createConversationHTML(conv);
+    });
+
+    return html;
+}
+
+/* =========================================================
+   КЛИК ПО ДИАЛОГУ
+   ========================================================= */
+
+function bindConversationClickHandlers() {
     document.querySelectorAll(".conversation-item").forEach((item) => {
         item.addEventListener("click", function (event) {
-            // Клик по настройкам не открывает диалог
+            /*
+             * Не открываем диалог,
+             * если пользователь
+             * работает с settings.
+             */
             if (
                 event.target.closest(".conversation-settings") ||
                 event.target.closest(".conversation-settings-panel")
@@ -318,7 +509,9 @@ function renderConversations(conversations) {
                 return;
             }
 
-            // Диалог уже открыт — ничего не делаем
+            /*
+             * Уже открыт.
+             */
             if (String(state.currentConversationId) === String(id)) {
                 return;
             }
@@ -326,32 +519,45 @@ function renderConversations(conversations) {
             loadConversation(id);
         });
     });
+}
 
-    // Обработчики удаления старого trash-mode
+/* =========================================================
+   СТАРЫЙ TRASH MODE
+   ========================================================= */
+
+function bindTrashModeHandlers() {
     document.querySelectorAll(".delete-conversation").forEach((btn) => {
         btn.addEventListener("click", function (event) {
+            event.preventDefault();
+
             event.stopPropagation();
 
-            const id = this.getAttribute("data-id");
+            const id = this.dataset.id;
 
             if (!id) {
                 return;
             }
 
-            deleteConversation(id);
+            /*
+             * Даже старое удаление
+             * теперь идёт через
+             * наше подтверждение.
+             */
+            openDeleteConversationModal(id);
         });
     });
 
-    // Выход из режима корзины
     const exitBtn = document.querySelector(".exit-trash-mode");
 
     if (exitBtn) {
         exitBtn.addEventListener("click", function (event) {
+            event.preventDefault();
+
             event.stopPropagation();
 
             state.isTrashMode = false;
 
-            loadConversations();
+            renderSortedConversations();
 
             const binIcon = document.querySelector(".bin-icon");
 
@@ -360,11 +566,12 @@ function renderConversations(conversations) {
             }
         });
     }
-
-    updateDeleteButtonsVisibility();
 }
 
-// Добавление класса active текущему диалогу
+/* =========================================================
+   ACTIVE CONVERSATION
+   ========================================================= */
+
 function updateActiveConversation() {
     const items = document.querySelectorAll(".conversation-item");
 
@@ -377,7 +584,10 @@ function updateActiveConversation() {
     });
 }
 
-// Обновление видимости кнопок удаления
+/* =========================================================
+   TRASH MODE VISIBILITY
+   ========================================================= */
+
 function updateDeleteButtonsVisibility() {
     const deleteButtons = document.querySelectorAll(".delete-conversation");
 
@@ -404,7 +614,69 @@ function updateDeleteButtonsVisibility() {
     });
 }
 
-// Создание HTML диалога
+/* =========================================================
+   DELETE MODAL
+   ========================================================= */
+
+function openDeleteConversationModal(id) {
+    const modal = document.getElementById("deleteConversationModal");
+
+    if (!modal) {
+        console.error("Не найден #deleteConversationModal");
+
+        return;
+    }
+
+    conversationPendingDelete = id;
+
+    /*
+     * Закрываем settings popover.
+     */
+    const openedPopover = document.querySelector(
+        ".conversation-settings-panel:popover-open",
+    );
+
+    if (openedPopover && typeof openedPopover.hidePopover === "function") {
+        openedPopover.hidePopover();
+    }
+
+    modal.classList.add("is-open");
+
+    modal.setAttribute("aria-hidden", "false");
+
+    document.body.style.overflow = "hidden";
+
+    const confirmButton = document.getElementById("confirmDeleteConversation");
+
+    if (confirmButton) {
+        confirmButton.disabled = false;
+
+        confirmButton.textContent = "Да, удалить";
+
+        confirmButton.focus();
+    }
+}
+
+function closeDeleteConversationModal() {
+    const modal = document.getElementById("deleteConversationModal");
+
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.remove("is-open");
+
+    modal.setAttribute("aria-hidden", "true");
+
+    document.body.style.overflow = "";
+
+    conversationPendingDelete = null;
+}
+
+/* =========================================================
+   HTML ДИАЛОГА
+   ========================================================= */
+
 function createConversationHTML(conv) {
     const anchorName = `--conversation-settings-${conv.id}`;
 
@@ -416,52 +688,70 @@ function createConversationHTML(conv) {
 
     return `
         <div
-            class="conversation-item fade_text w-100 position-relative p-2 mb-3 rounded ${state.isTrashMode ? "trash-mode-item" : ""} ${isActive ? "active" : ""}"
+            class="conversation-item fade_text w-100 position-relative p-2 mb-1 rounded ${state.isTrashMode ? "trash-mode-item" : ""} ${isActive ? "active" : ""}"
             data-id="${conv.id}"
         >
             <div
                 class="d-flex justify-content-between align-items-start"
             >
-                <div class="flex-grow-1 me-2">
+
+                <div
+                    class="flex-grow-1 me-2"
+                >
+
                     <p
-                        class="m-0 conversation-title fw-bold mb-2"
+                        class="conversation-title fw-bold mb-1"
                     >
-                        ${escapeHtml(conv.title)}
+                        ${escapeHtml(conv.title ?? "Без названия")}
                     </p>
+
 
                     ${
                         conv.last_question
                             ? `
-                                <p class="m-0 small">
+                                <p
+                                    class="m-0 conversation-text-small"
+                                >
                                     ${escapeHtml(conv.last_question)}
                                 </p>
                             `
                             : ""
                     }
 
+
                     ${
                         conv.last_answer_preview
                             ? `
-                                <p class="m-0 text-muted small fst-italic">
+                                <p
+                                    class="m-0 conversation-text-small text-muted fst-italic"
+                                >
                                     ${escapeHtml(conv.last_answer_preview)}...
                                 </p>
                             `
                             : ""
                     }
+
                 </div>
 
-                <div class="fade_block"></div>
+
+                <div
+                    class="fade_block"
+                ></div>
+
             </div>
 
 
-            <div class="conversation-settings">
+            <div
+                class="conversation-settings"
+            >
+
                 <button
                     type="button"
                     class="settings-btn"
                     data-conversation-id="${conv.id}"
                     popovertarget="${panelId}"
                     style="anchor-name: ${anchorName};"
-                    aria-label="Настройки чата"
+                    aria-label="Настройки диалога"
                 >
                     <img
                         class="settings_img"
@@ -477,47 +767,200 @@ function createConversationHTML(conv) {
                     popover="auto"
                     style="position-anchor: ${anchorName};"
                 >
+
                     <button
                         type="button"
-                        class="conversation-settings-panel__item d-flex align-items-center justify-content-start"
+                        class="conversation-settings-panel__item"
                         data-action="rename"
                         data-conversation-id="${conv.id}"
                     >
-                    <img src="/icons/edit.svg" class="conversation_panel_image" alt="">
+
+                        <img
+                            src="/icons/edit.svg"
+                            class="conversation_panel_image"
+                            alt=""
+                        >
+
                         Переименовать
+
                     </button>
+
 
                     <button
                         type="button"
-                        class="conversation-settings-panel__item conversation-settings-panel__item--danger d-flex align-items-center justify-content-start"
+                        class="conversation-settings-panel__item conversation-settings-panel__item--danger"
                         data-action="delete"
                         data-conversation-id="${conv.id}"
                     >
-                    <img src="/icons/delete.svg" class="conversation_panel_image" alt="">
+
+                        <img
+                            src="/icons/delete.svg"
+                            class="conversation_panel_image"
+                            alt=""
+                        >
+
                         Удалить
+
                     </button>
+
                 </div>
+
             </div>
-
-
-            <small class="text-muted d-block mt-1">
-                ${escapeHtml(conv.last_interaction_at ?? "")}
-            </small>
         </div>
     `;
 }
 
-// Инициализация диалогов
+/* =========================================================
+   ИНИЦИАЛИЗАЦИЯ
+   ========================================================= */
+
 export function initConversations() {
     const newChatBtn = document.querySelector(".new-chat-block");
 
     const binIcon = document.querySelector(".bin-icon");
 
+    const conversationSort = document.getElementById("conversationSort");
+
+    const cancelDeleteButton = document.getElementById(
+        "cancelDeleteConversation",
+    );
+
+    const confirmDeleteButton = document.getElementById(
+        "confirmDeleteConversation",
+    );
+
+    /*
+     * Новый диалог.
+     */
     if (newChatBtn) {
         newChatBtn.addEventListener("click", startNewConversation);
     }
 
+    /*
+     * Старый режим корзины.
+     */
     if (binIcon) {
         binIcon.addEventListener("click", toggleTrashMode);
     }
+
+    /*
+     * Сортировка.
+     */
+    if (conversationSort) {
+        currentSort = conversationSort.value || "new";
+
+        conversationSort.addEventListener("change", function () {
+            currentSort = this.value;
+
+            animateSortedConversations();
+        });
+    }
+
+    /*
+     * Settings:
+     * кнопка "Удалить".
+     *
+     * Используем делегирование,
+     * потому что элементы истории
+     * создаются заново после render.
+     */
+    document.addEventListener("click", function (event) {
+        const target = event.target;
+
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        const deleteButton = target.closest('[data-action="delete"]');
+
+        if (!deleteButton) {
+            return;
+        }
+
+        event.preventDefault();
+
+        event.stopPropagation();
+
+        const conversationId = deleteButton.dataset.conversationId;
+
+        if (!conversationId) {
+            return;
+        }
+
+        openDeleteConversationModal(conversationId);
+    });
+
+    /*
+     * Нет.
+     */
+    if (cancelDeleteButton) {
+        cancelDeleteButton.addEventListener(
+            "click",
+            closeDeleteConversationModal,
+        );
+    }
+
+    /*
+     * Да, удалить.
+     */
+    if (confirmDeleteButton) {
+        confirmDeleteButton.addEventListener("click", async function () {
+            if (conversationPendingDelete === null) {
+                return;
+            }
+
+            const conversationId = conversationPendingDelete;
+
+            /*
+             * Блокируем повторный клик.
+             */
+            this.disabled = true;
+
+            this.textContent = "Удаление...";
+
+            const success = await deleteConversation(conversationId);
+
+            /*
+             * Если всё успешно —
+             * закрываем окно.
+             */
+            if (success) {
+                closeDeleteConversationModal();
+
+                return;
+            }
+
+            /*
+             * При ошибке оставляем
+             * окно открытым.
+             */
+            this.disabled = false;
+
+            this.textContent = "Да, удалить";
+        });
+    }
+
+    /*
+     * Клик на затемнение.
+     */
+    document
+        .querySelectorAll("[data-delete-modal-close]")
+        .forEach((element) => {
+            element.addEventListener("click", closeDeleteConversationModal);
+        });
+
+    /*
+     * Escape.
+     */
+    document.addEventListener("keydown", function (event) {
+        if (event.key !== "Escape") {
+            return;
+        }
+
+        const modal = document.getElementById("deleteConversationModal");
+
+        if (modal?.classList.contains("is-open")) {
+            closeDeleteConversationModal();
+        }
+    });
 }

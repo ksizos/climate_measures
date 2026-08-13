@@ -6,6 +6,7 @@
 /storage/*.key
 /storage/pail
 /vendor
+test_models.py
 .env
 .env.backup
 .env.production

@@ -4,22 +4,29 @@ import { initConversations, loadConversations } from "./conversations.js";
 
 import { initSidebar } from "./sidebar.js";
 
-import { checkServiceStatus } from "./status.js";
-
 import { scrollToBottom } from "./ui.js";
-
-marked.setOptions({
-    breaks: true,
-    gfm: true,
-});
 
 document.addEventListener("DOMContentLoaded", async () => {
     initSidebar();
-    initChat();
-    initConversations();
 
-    await loadConversations();
-    await checkServiceStatus();
+    if (
+        typeof marked !== "undefined" &&
+        typeof marked.setOptions === "function"
+    ) {
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+        });
+    }
+
+    initChat();
+
+    initConversations();
+    try {
+        await loadConversations();
+    } catch (error) {
+        console.error("Ошибка загрузки диалогов:", error);
+    }
 
     scrollToBottom();
 });

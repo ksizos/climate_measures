@@ -217,6 +217,15 @@ Route::middleware([
     )->name('climate.ask');
 
 
+    Route::post(
+        '/climate/cancel',
+        [
+            ClimateController::class,
+            'cancelGeneration',
+        ],
+    )->name('climate.cancel');
+
+
     Route::get(
         '/climate/health',
         [
@@ -224,7 +233,6 @@ Route::middleware([
             'checkHealth',
         ],
     )->name('climate.health');
-
 
     /*
     |--------------------------------------------------------------------------

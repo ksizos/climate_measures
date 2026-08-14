@@ -30,10 +30,6 @@ export function initChat() {
         return;
     }
 
-    /**
-     * Автоматическая высота textarea
-     * + состояние submit.
-     */
     questionInput.addEventListener("input", function () {
         this.style.height = "auto";
 
@@ -44,9 +40,6 @@ export function initChat() {
         }
     });
 
-    /**
-     * Ctrl + Enter / Cmd + Enter.
-     */
     questionInput.addEventListener("keydown", (event) => {
         if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
             event.preventDefault();
@@ -57,9 +50,6 @@ export function initChat() {
         }
     });
 
-    /**
-     * Отправка / остановка.
-     */
     submitBtn.addEventListener("click", () => {
         if (isGenerating) {
             stopGeneration();
@@ -74,7 +64,7 @@ export function initChat() {
 }
 
 /**
- * Уникальный ID конкретной генерации.
+ * Уникальный ID генерации.
  */
 function createRequestId() {
     if (
@@ -88,7 +78,7 @@ function createRequestId() {
 }
 
 /**
- * submit.svg <-> stop.svg
+ * Переключение submit / stop.
  */
 function setGeneratingState(generating) {
     const submitBtn = document.getElementById("submitBtn");
@@ -102,10 +92,6 @@ function setGeneratingState(generating) {
     isGenerating = generating;
 
     if (generating) {
-        /*
-         * Кнопка STOP должна оставаться
-         * доступной во время генерации.
-         */
         submitBtn.disabled = false;
 
         submitBtn.classList.add("is-generating");
@@ -121,12 +107,9 @@ function setGeneratingState(generating) {
 
     submitBtn.disabled = !questionInput?.value.trim();
 }
+
 /**
- * Отправляет серверу команду STOP.
- *
- * Ошибки здесь намеренно игнорируются:
- * пользователь не должен видеть
- * уведомлений при остановке.
+ * Команда STOP на сервер.
  */
 async function cancelServerGeneration(requestId) {
     if (!requestId) {
@@ -154,55 +137,32 @@ async function cancelServerGeneration(requestId) {
             }),
         });
     } catch {
-        /*
-         * Ошибка остановки
-         * не выводится пользователю.
-         */
+        // Ошибка STOP не отображается пользователю.
     }
 }
 
 /**
- * Немедленная остановка генерации.
+ * Остановка генерации.
  */
 async function stopGeneration() {
     if (!isGenerating) {
         return;
     }
 
-    /*
-     * Запоминаем значения именно
-     * отменяемого запроса.
-     */
     const requestId = currentRequestId;
 
     const controller = currentRequestController;
 
     const answerElement = currentAnswerElement;
 
-    /*
-     * Сразу помечаем запрос
-     * остановленным.
-     *
-     * Это важно, чтобы старый запрос
-     * больше не считался активным
-     * на клиенте.
-     */
     currentRequestId = null;
 
     currentRequestController = null;
 
     currentAnswerElement = null;
 
-    /*
-     * Сразу возвращаем кнопку
-     * в состояние submit.
-     */
     setGeneratingState(false);
 
-    /*
-     * Вместо удаления сообщения
-     * показываем статус остановки.
-     */
     if (answerElement) {
         const messageContent = answerElement.querySelector(".message-content");
 
@@ -217,21 +177,8 @@ async function stopGeneration() {
         }
     }
 
-    /*
-     * Сначала отправляем серверу
-     * настоящую команду отмены.
-     *
-     * ВАЖНО:
-     * browser fetch /ask пока ещё
-     * не прерываем, чтобы Laravel
-     * успел выполнить /cancel.
-     */
     await cancelServerGeneration(requestId);
 
-    /*
-     * После отправки STOP
-     * разрываем старый /ask.
-     */
     if (controller) {
         controller.abort();
     }
@@ -255,9 +202,9 @@ export function clearChatMessages() {
 }
 
 /**
- * Добавление вопроса + ответа.
+ * Добавление пары вопрос + ответ.
  */
-export function addQuestionAnswerPair(question, answer) {
+export function addQuestionAnswerPair(question, answer, status = "success") {
     const chatMessages = document.getElementById("chatMessages");
 
     if (!chatMessages) {
@@ -267,9 +214,6 @@ export function addQuestionAnswerPair(question, answer) {
         };
     }
 
-    /*
-     * Пользователь.
-     */
     const questionDiv = document.createElement("div");
 
     questionDiv.className = "message user-message fade-in";
@@ -282,28 +226,47 @@ export function addQuestionAnswerPair(question, answer) {
 
     chatMessages.appendChild(questionDiv);
 
-    /*
-     * Ассистент.
-     */
     const answerDiv = document.createElement("div");
 
     answerDiv.className = "message assistant-message fade-in mt-2";
 
     chatMessages.appendChild(answerDiv);
 
-    const markdownHTML = marked.parse(answer || "");
+    if (status === "error") {
+        answerDiv.innerHTML = `
+            <div
+                class="message-content markdown-content"
+            >
+                <span class="text-danger">
+                    ${escapeHtml(answer || "")}
+                </span>
+            </div>
+        `;
+    } else if (status === "stopped") {
+        answerDiv.innerHTML = `
+            <div
+                class="message-content markdown-content"
+            >
+                <span class="generation-stopped">
+                    ${escapeHtml(answer || "Генерация остановлена")}
+                </span>
+            </div>
+        `;
+    } else {
+        const markdownHTML = marked.parse(answer || "");
 
-    const safeHTML = addTargetBlankToLinks(markdownHTML);
+        const safeHTML = addTargetBlankToLinks(markdownHTML);
 
-    answerDiv.innerHTML = `
-        <div
-            class="message-content markdown-content"
-        >
-            ${safeHTML}
-        </div>
-    `;
+        answerDiv.innerHTML = `
+            <div
+                class="message-content markdown-content"
+            >
+                ${safeHTML}
+            </div>
+        `;
 
-    setupAnswerActions(answerDiv);
+        setupAnswerActions(answerDiv);
+    }
 
     scrollToBottom();
 
@@ -314,7 +277,7 @@ export function addQuestionAnswerPair(question, answer) {
 }
 
 /**
- * Действия над таблицами ответа.
+ * Кнопки экспорта в ответах.
  */
 function setupAnswerActions(answerDiv) {
     if (!answerDiv) {
@@ -370,6 +333,7 @@ function setupAnswerActions(answerDiv) {
     if (exportDocxBtn) {
         exportDocxBtn.addEventListener("click", (event) => {
             event.preventDefault();
+
             event.stopPropagation();
 
             const tableHtml = markdownContent.innerHTML;
@@ -387,6 +351,7 @@ function setupAnswerActions(answerDiv) {
     if (exportExcelBtn) {
         exportExcelBtn.addEventListener("click", (event) => {
             event.preventDefault();
+
             event.stopPropagation();
 
             const tableHtml = markdownContent.innerHTML;
@@ -430,10 +395,6 @@ async function sendMessage() {
         return;
     }
 
-    /*
-     * Текущее незавершённое
-     * сообщение ассистента.
-     */
     currentAnswerElement = pairElements.answerDiv;
 
     pairElements.answerDiv.innerHTML = `
@@ -457,24 +418,14 @@ async function sendMessage() {
 
     scrollToElement(pairElements.questionDiv);
 
-    /*
-     * Очищаем textarea.
-     */
     questionInput.value = "";
 
     questionInput.style.height = "auto";
 
-    /*
-     * Уникальный запрос.
-     */
     const requestId = createRequestId();
 
     currentRequestId = requestId;
 
-    /*
-     * AbortController относится
-     * только к этому запросу.
-     */
     const controller = new AbortController();
 
     currentRequestController = controller;
@@ -512,25 +463,35 @@ async function sendMessage() {
             signal: controller.signal,
         });
 
-        /*
-         * Если запрос уже остановлен,
-         * ничего больше не рендерим.
-         */
         if (currentRequestId !== requestId) {
             return;
         }
 
-        const data = await response.json();
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch {
+            data = {
+                success: false,
+
+                error: "Сервис вернул некорректный ответ.",
+            };
+        }
 
         if (currentRequestId !== requestId) {
             return;
+        }
+
+        /*
+         * conversation_id сохраняем
+         * независимо от success.
+         */
+        if (data.conversation_id) {
+            state.currentConversationId = data.conversation_id;
         }
 
         if (data.success) {
-            if (data.conversation_id) {
-                state.currentConversationId = data.conversation_id;
-            }
-
             const messageContent =
                 pairElements.answerDiv.querySelector(".message-content");
 
@@ -550,7 +511,7 @@ async function sendMessage() {
 
             scrollToElement(pairElements.answerDiv);
 
-            loadConversations();
+            await loadConversations();
 
             return;
         }
@@ -569,22 +530,20 @@ async function sendMessage() {
                 </span>
             `;
         }
-    } catch (err) {
+
         /*
-         * STOP.
-         *
-         * Без текста,
-         * без alert,
-         * без сообщения.
+         * Ошибочный запрос тоже
+         * сохранён в БД,
+         * поэтому обновляем sidebar.
          */
+        await loadConversations();
+
+        scrollToElement(pairElements.answerDiv);
+    } catch (err) {
         if (err.name === "AbortError") {
             return;
         }
 
-        /*
-         * Если это уже не текущий
-         * request — игнорируем.
-         */
         if (currentRequestId !== requestId) {
             return;
         }
@@ -604,14 +563,9 @@ async function sendMessage() {
                 </span>
             `;
         }
+
+        await loadConversations();
     } finally {
-        /*
-         * Очень важно:
-         *
-         * старый остановленный request
-         * не должен сбросить состояние
-         * уже нового запроса.
-         */
         if (currentRequestId === requestId) {
             currentRequestId = null;
 

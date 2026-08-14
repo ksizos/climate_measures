@@ -90,59 +90,160 @@ class ClimateController extends Controller
             )
         );
 
+
         $request->validate([
-            'question' =>
-            'required|string|min:3|max:1000',
-            'conversation_id' =>
-            'nullable|exists:conversations,id,user_id,' . auth()->id(),
-            'request_id' =>
-            'required|string|max:100',
+            'question' => [
+                'required',
+                'string',
+                'min:3',
+                'max:1000',
+            ],
+
+            'conversation_id' => [
+                'nullable',
+                'exists:conversations,id,user_id,' . auth()->id(),
+            ],
+
+            'request_id' => [
+                'required',
+                'string',
+                'max:100',
+            ],
         ]);
 
-        try {
-            // Создаем новый диалог, если не указан
-            if (!$request->conversation_id) {
-                $conversation = Conversation::create([
-                    'user_id' => auth()->id(),
-                    'title' => Str::limit($request->question, 50),
-                    'last_interaction_at' => now()
+
+        /*
+     * -----------------------------------------------------
+     * 1. Сначала создаём / получаем диалог.
+     *
+     * Это специально находится ДО обращения к Python.
+     * Даже если Python недоступен, диалог уже существует.
+     * -----------------------------------------------------
+     */
+        if (!$request->conversation_id) {
+
+            $conversation =
+                Conversation::create([
+                    'user_id' =>
+                    auth()->id(),
+
+                    'title' =>
+                    Str::limit(
+                        $request->question,
+                        50
+                    ),
+
+                    'last_interaction_at' =>
+                    now(),
                 ]);
-                $conversation_id = $conversation->id;
-            } else {
-                $conversation = Conversation::findOrFail($request->conversation_id);
-                $conversation_id = $conversation->id;
+        } else {
 
-                if (!$conversation->title || $conversation->title === 'Новый диалог') {
-                    $conversation->title = Str::limit($request->question, 50);
-                    $conversation->save();
-                }
+            $conversation =
+                Conversation::where(
+                    'user_id',
+                    auth()->id()
+                )
+                ->findOrFail(
+                    $request->conversation_id
+                );
+
+
+            if (
+                !$conversation->title
+                ||
+                $conversation->title
+                ===
+                'Новый диалог'
+            ) {
+                $conversation->title =
+                    Str::limit(
+                        $request->question,
+                        50
+                    );
+
+                $conversation->save();
             }
+        }
 
-            // Получаем последние 3 пары для контекста
-            $context_pairs = Message::where('conversation_id', $conversation_id)
-                ->orderBy('interaction_time', 'desc')
-                ->take(3)
-                ->get()
-                ->reverse(); // Хронологический порядок
 
-            $context = '';
-            foreach ($context_pairs as $pair) {
-                $context .= "Пользователь: {$pair->question}\n";
-                $context .= "Ассистент: {$pair->answer}\n\n";
-            }
+        $conversationId =
+            $conversation->id;
 
-            Log::info('Отправка запроса к Climate API', [
+
+        /*
+     * -----------------------------------------------------
+     * 2. Контекст.
+     *
+     * В контекст модели отправляем только успешные ответы.
+     *
+     * Сообщения вроде:
+     * "Не удалось подключиться к сервису"
+     * не должны становиться частью LLM-контекста.
+     * -----------------------------------------------------
+     */
+        $contextPairs =
+            Message::where(
+                'conversation_id',
+                $conversationId
+            )
+            ->where(
+                'status',
+                'success'
+            )
+            ->orderBy(
+                'interaction_time',
+                'desc'
+            )
+            ->take(3)
+            ->get()
+            ->reverse();
+
+
+        $context = '';
+
+
+        foreach ($contextPairs as $pair) {
+
+            $context .=
+                "Пользователь: "
+                . $pair->question
+                . "\n";
+
+
+            $context .=
+                "Ассистент: "
+                . $pair->answer
+                . "\n\n";
+        }
+
+
+        Log::info(
+            'Отправка запроса к Climate API',
+            [
                 'question' =>
                 $request->question,
+
                 'conversation_id' =>
-                $conversation_id,
+                $conversationId,
+
                 'context' =>
                 $context,
+
                 'request_id' =>
                 $request->request_id,
-            ]);
+            ]
+        );
 
-            $response = Http::connectTimeout(10)
+
+        try {
+
+            /*
+         * -------------------------------------------------
+         * 3. Python API.
+         * -------------------------------------------------
+         */
+            $response =
+                Http::connectTimeout(10)
                 ->timeout(
                     (int) config(
                         'services.climate_api.timeout',
@@ -150,13 +251,14 @@ class ClimateController extends Controller
                     )
                 )
                 ->post(
-                    $this->apiBaseUrl . '/ask',
+                    $this->apiBaseUrl
+                        . '/ask',
                     [
                         'question' =>
                         $request->question,
 
                         'conversation_id' =>
-                        $conversation_id,
+                        $conversationId,
 
                         'context' =>
                         $context,
@@ -166,51 +268,286 @@ class ClimateController extends Controller
                     ]
                 );
 
+
+            /*
+         * -------------------------------------------------
+         * 4. Успешный ответ.
+         * -------------------------------------------------
+         */
             if ($response->successful()) {
-                $data = $response->json();
-                Log::info('Успешный ответ от Climate API', [
-                    'answer_length' => strlen($data['answer'] ?? ''),
-                    'status' => $data['status'] ?? 'unknown'
-                ]);
 
-                // Сохраняем пару вопрос-ответ
+                $data =
+                    $response->json();
+
+
+                $answer =
+                    $data['answer']
+                    ??
+                    'Ошибка генерации ответа';
+
+
                 Message::create([
-                    'conversation_id' => $conversation_id,
-                    'question' => $request->question,
-                    'answer' => $data['answer'] ?? 'Ошибка генерации ответа',
-                    'interaction_time' => now()
+                    'conversation_id' =>
+                    $conversationId,
+
+                    'question' =>
+                    $request->question,
+
+                    'answer' =>
+                    $answer,
+
+                    'status' =>
+                    'success',
+
+                    'error_code' =>
+                    null,
+
+                    'interaction_time' =>
+                    now(),
                 ]);
 
-                // Обновляем время последнего взаимодействия
-                $conversation->updateLastInteractionTime();
+
+                $conversation
+                    ->updateLastInteractionTime();
+
+
+                Log::info(
+                    'Успешный ответ от Climate API',
+                    [
+                        'answer_length' =>
+                        strlen($answer),
+
+                        'status' =>
+                        $data['status']
+                            ??
+                            'success',
+                    ]
+                );
+
 
                 return response()->json([
-                    'success' => true,
-                    'answer' => $data['answer'] ?? 'Ошибка генерации ответа',
-                    'status' => $data['status'] ?? 'success',
-                    'conversation_id' => $conversation_id
-                ]);
-            } else {
-                Log::error('Ошибка API', [
-                    'status' => $response->status(),
-                    'body' => $response->body()
-                ]);
+                    'success' =>
+                    true,
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Сервис временно недоступен. Попробуйте позже.'
-                ], 500);
+                    'answer' =>
+                    $answer,
+
+                    'status' =>
+                    'success',
+
+                    'conversation_id' =>
+                    $conversationId,
+                ]);
             }
-        } catch (\Exception $e) {
-            Log::error('Исключение при обращении к Climate API', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+
+
+            /*
+         * -------------------------------------------------
+         * 5. Python доступен,
+         * но вернул HTTP-ошибку.
+         * -------------------------------------------------
+         */
+
+            Log::error(
+                'Ошибка Climate API',
+                [
+                    'status' =>
+                    $response->status(),
+
+                    'body' =>
+                    $response->body(),
+                ]
+            );
+
+
+            $errorMessage =
+                'Сервис временно недоступен. Попробуйте позже.';
+
+
+            Message::create([
+                'conversation_id' =>
+                $conversationId,
+
+                'question' =>
+                $request->question,
+
+                'answer' =>
+                $errorMessage,
+
+                'status' =>
+                'error',
+
+                'error_code' =>
+                'api_error_'
+                    . $response->status(),
+
+                'interaction_time' =>
+                now(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Не удалось подключиться к сервису. Проверьте, запущен ли Python сервер.'
-            ], 500);
+
+            $conversation
+                ->updateLastInteractionTime();
+
+
+            return response()->json(
+                [
+                    'success' =>
+                    false,
+
+                    'error' =>
+                    $errorMessage,
+
+                    'status' =>
+                    'error',
+
+                    'conversation_id' =>
+                    $conversationId,
+                ],
+                500
+            );
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+
+            /*
+         * -------------------------------------------------
+         * 6. Python вообще недоступен.
+         *
+         * Это как раз твой случай со скриншота.
+         * -------------------------------------------------
+         */
+
+            $errorMessage =
+                'Не удалось подключиться к сервису. '
+                . 'Проверьте, запущен ли Python сервер.';
+
+
+            Log::error(
+                'Не удалось подключиться к Climate API',
+                [
+                    'message' =>
+                    $e->getMessage(),
+
+                    'conversation_id' =>
+                    $conversationId,
+
+                    'request_id' =>
+                    $request->request_id,
+                ]
+            );
+
+
+            Message::create([
+                'conversation_id' =>
+                $conversationId,
+
+                'question' =>
+                $request->question,
+
+                'answer' =>
+                $errorMessage,
+
+                'status' =>
+                'error',
+
+                'error_code' =>
+                'connection_error',
+
+                'interaction_time' =>
+                now(),
+            ]);
+
+
+            $conversation
+                ->updateLastInteractionTime();
+
+
+            return response()->json(
+                [
+                    'success' =>
+                    false,
+
+                    'error' =>
+                    $errorMessage,
+
+                    'status' =>
+                    'error',
+
+                    'conversation_id' =>
+                    $conversationId,
+                ],
+                500
+            );
+        } catch (\Throwable $e) {
+
+            /*
+         * -------------------------------------------------
+         * 7. Любая другая непредвиденная ошибка.
+         * -------------------------------------------------
+         */
+
+            $errorMessage =
+                'Произошла ошибка при обработке запроса.';
+
+
+            Log::error(
+                'Исключение при обработке Climate API',
+                [
+                    'message' =>
+                    $e->getMessage(),
+
+                    'trace' =>
+                    $e->getTraceAsString(),
+
+                    'conversation_id' =>
+                    $conversationId,
+
+                    'request_id' =>
+                    $request->request_id,
+                ]
+            );
+
+
+            Message::create([
+                'conversation_id' =>
+                $conversationId,
+
+                'question' =>
+                $request->question,
+
+                'answer' =>
+                $errorMessage,
+
+                'status' =>
+                'error',
+
+                'error_code' =>
+                'internal_error',
+
+                'interaction_time' =>
+                now(),
+            ]);
+
+
+            $conversation
+                ->updateLastInteractionTime();
+
+
+            return response()->json(
+                [
+                    'success' =>
+                    false,
+
+                    'error' =>
+                    $errorMessage,
+
+                    'status' =>
+                    'error',
+
+                    'conversation_id' =>
+                    $conversationId,
+                ],
+                500
+            );
         }
     }
 

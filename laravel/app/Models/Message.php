@@ -15,6 +15,8 @@ class Message extends Model
         'conversation_id',
         'question',
         'answer',
+        'status',
+        'error_code',
         'interaction_time',
     ];
 

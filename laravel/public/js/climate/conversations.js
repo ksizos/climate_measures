@@ -72,7 +72,11 @@ export async function loadConversation(id) {
 
         if (data.conversation && Array.isArray(data.conversation.messages)) {
             data.conversation.messages.forEach((pair) => {
-                addQuestionAnswerPair(pair.question, pair.answer);
+                addQuestionAnswerPair(
+                    pair.question,
+                    pair.answer,
+                    pair.status ?? "success",
+                );
             });
         }
 
@@ -121,10 +125,6 @@ export async function deleteConversation(id) {
             return false;
         }
 
-        /*
-         * Если удалили диалог,
-         * который сейчас открыт.
-         */
         if (String(state.currentConversationId) === String(id)) {
             state.currentConversationId = null;
 
@@ -133,10 +133,6 @@ export async function deleteConversation(id) {
             showWelcome();
         }
 
-        /*
-         * После удаления заново
-         * загружаем историю.
-         */
         await loadConversations();
 
         return true;
@@ -193,11 +189,6 @@ function animateSortedConversations() {
    ДАТА
    ========================================================= */
 
-/*
- * Парсинг:
- *
- * 13.08.2026 14:35
- */
 function parseRussianDate(dateString) {
     if (!dateString) {
         return null;
@@ -250,17 +241,10 @@ function sortConversations(conversations) {
 
         const dateB = parseRussianDate(b.last_interaction_at);
 
-        /*
-         * Нет даты у обоих.
-         */
         if (!dateA && !dateB) {
             return 0;
         }
 
-        /*
-         * Диалог без даты
-         * всегда вниз.
-         */
         if (!dateA) {
             return 1;
         }
@@ -269,17 +253,10 @@ function sortConversations(conversations) {
             return -1;
         }
 
-        /*
-         * Сначала старые.
-         */
         if (currentSort === "old") {
             return dateA.getTime() - dateB.getTime();
         }
 
-        /*
-         * По умолчанию:
-         * сначала новые.
-         */
         return dateB.getTime() - dateA.getTime();
     });
 
@@ -381,11 +358,6 @@ function renderConversations(conversations) {
 
     let html = "";
 
-    /*
-     * Режим старой корзины,
-     * если он пока остаётся
-     * в проекте.
-     */
     if (state.isTrashMode) {
         html += `
             <div
@@ -408,13 +380,6 @@ function renderConversations(conversations) {
         `;
     }
 
-    /*
-     * Сначала старые:
-     *
-     * Ранее
-     * Вчера
-     * Сегодня
-     */
     if (currentSort === "old") {
         html += renderConversationGroup("Ранее", olderConvs, "mt-2");
 
@@ -422,14 +387,6 @@ function renderConversations(conversations) {
 
         html += renderConversationGroup("Сегодня", todayConvs, "mt-3");
     } else {
-        /*
-         * Сначала новые:
-         *
-         * Сегодня
-         * Вчера
-         * Ранее
-         */
-
         html += renderConversationGroup("Сегодня", todayConvs, "mt-2");
 
         html += renderConversationGroup("Вчера", yesterdayConvs, "mt-3");
@@ -487,11 +444,6 @@ function renderConversationGroup(title, conversations, marginClass) {
 function bindConversationClickHandlers() {
     document.querySelectorAll(".conversation-item").forEach((item) => {
         item.addEventListener("click", function (event) {
-            /*
-             * Не открываем диалог,
-             * если пользователь
-             * работает с settings.
-             */
             if (
                 event.target.closest(".conversation-settings") ||
                 event.target.closest(".conversation-settings-panel")
@@ -509,9 +461,6 @@ function bindConversationClickHandlers() {
                 return;
             }
 
-            /*
-             * Уже открыт.
-             */
             if (String(state.currentConversationId) === String(id)) {
                 return;
             }
@@ -538,11 +487,6 @@ function bindTrashModeHandlers() {
                 return;
             }
 
-            /*
-             * Даже старое удаление
-             * теперь идёт через
-             * наше подтверждение.
-             */
             openDeleteConversationModal(id);
         });
     });
@@ -629,9 +573,6 @@ function openDeleteConversationModal(id) {
 
     conversationPendingDelete = id;
 
-    /*
-     * Закрываем settings popover.
-     */
     const openedPopover = document.querySelector(
         ".conversation-settings-panel:popover-open",
     );
@@ -688,7 +629,9 @@ function createConversationHTML(conv) {
 
     return `
         <div
-            class="conversation-item fade_text w-100 position-relative p-2 mb-1 rounded ${state.isTrashMode ? "trash-mode-item" : ""} ${isActive ? "active" : ""}"
+            class="conversation-item fade_text w-100 position-relative p-2 mb-1 rounded ${
+                state.isTrashMode ? "trash-mode-item" : ""
+            } ${isActive ? "active" : ""}"
             data-id="${conv.id}"
         >
             <div
@@ -705,7 +648,6 @@ function createConversationHTML(conv) {
                         ${escapeHtml(conv.title ?? "Без названия")}
                     </p>
 
-
                     ${
                         conv.last_question
                             ? `
@@ -717,7 +659,6 @@ function createConversationHTML(conv) {
                             `
                             : ""
                     }
-
 
                     ${
                         conv.last_answer_preview
@@ -733,13 +674,11 @@ function createConversationHTML(conv) {
 
                 </div>
 
-
                 <div
                     class="fade_block"
                 ></div>
 
             </div>
-
 
             <div
                 class="conversation-settings"
@@ -760,7 +699,6 @@ function createConversationHTML(conv) {
                     >
                 </button>
 
-
                 <div
                     id="${panelId}"
                     class="conversation-settings-panel"
@@ -774,7 +712,6 @@ function createConversationHTML(conv) {
                         data-action="rename"
                         data-conversation-id="${conv.id}"
                     >
-
                         <img
                             src="/icons/edit.svg"
                             class="conversation_panel_image"
@@ -782,9 +719,7 @@ function createConversationHTML(conv) {
                         >
 
                         Переименовать
-
                     </button>
-
 
                     <button
                         type="button"
@@ -792,7 +727,6 @@ function createConversationHTML(conv) {
                         data-action="delete"
                         data-conversation-id="${conv.id}"
                     >
-
                         <img
                             src="/icons/delete.svg"
                             class="conversation_panel_image"
@@ -800,7 +734,6 @@ function createConversationHTML(conv) {
                         >
 
                         Удалить
-
                     </button>
 
                 </div>
@@ -829,23 +762,14 @@ export function initConversations() {
         "confirmDeleteConversation",
     );
 
-    /*
-     * Новый диалог.
-     */
     if (newChatBtn) {
         newChatBtn.addEventListener("click", startNewConversation);
     }
 
-    /*
-     * Старый режим корзины.
-     */
     if (binIcon) {
         binIcon.addEventListener("click", toggleTrashMode);
     }
 
-    /*
-     * Сортировка.
-     */
     if (conversationSort) {
         currentSort = conversationSort.value || "new";
 
@@ -856,14 +780,6 @@ export function initConversations() {
         });
     }
 
-    /*
-     * Settings:
-     * кнопка "Удалить".
-     *
-     * Используем делегирование,
-     * потому что элементы истории
-     * создаются заново после render.
-     */
     document.addEventListener("click", function (event) {
         const target = event.target;
 
@@ -890,9 +806,6 @@ export function initConversations() {
         openDeleteConversationModal(conversationId);
     });
 
-    /*
-     * Нет.
-     */
     if (cancelDeleteButton) {
         cancelDeleteButton.addEventListener(
             "click",
@@ -900,9 +813,6 @@ export function initConversations() {
         );
     }
 
-    /*
-     * Да, удалить.
-     */
     if (confirmDeleteButton) {
         confirmDeleteButton.addEventListener("click", async function () {
             if (conversationPendingDelete === null) {
@@ -911,47 +821,30 @@ export function initConversations() {
 
             const conversationId = conversationPendingDelete;
 
-            /*
-             * Блокируем повторный клик.
-             */
             this.disabled = true;
 
             this.textContent = "Удаление...";
 
             const success = await deleteConversation(conversationId);
 
-            /*
-             * Если всё успешно —
-             * закрываем окно.
-             */
             if (success) {
                 closeDeleteConversationModal();
 
                 return;
             }
 
-            /*
-             * При ошибке оставляем
-             * окно открытым.
-             */
             this.disabled = false;
 
             this.textContent = "Да, удалить";
         });
     }
 
-    /*
-     * Клик на затемнение.
-     */
     document
         .querySelectorAll("[data-delete-modal-close]")
         .forEach((element) => {
             element.addEventListener("click", closeDeleteConversationModal);
         });
 
-    /*
-     * Escape.
-     */
     document.addEventListener("keydown", function (event) {
         if (event.key !== "Escape") {
             return;

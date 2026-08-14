@@ -13,13 +13,14 @@ import { clearChatMessages, addQuestionAnswerPair } from "./chat.js";
 import { escapeHtml } from "./utils.js";
 
 let conversationsCache = [];
+let conversationPendingRename = null;
 
 let currentSort = "new";
 
 let conversationPendingDelete = null;
+let deleteModalMode = null;
 
 let currentSearch = "";
-
 let searchTimeout = null;
 
 let conversationsRequestController = null;
@@ -48,6 +49,155 @@ export async function startNewConversation() {
     showWelcome();
 
     scrollToBottom();
+}
+
+/* =========================================================
+   ПЕРЕИМЕНОВАНИЕ
+   ========================================================= */
+
+async function renameConversation(id, title) {
+    try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+
+        const response = await fetch(`/climate/conversation/${id}/title`, {
+            method: "PATCH",
+
+            headers: {
+                "X-CSRF-TOKEN": csrfToken?.content ?? "",
+
+                "X-Requested-With": "XMLHttpRequest",
+
+                Accept: "application/json",
+
+                "Content-Type": "application/json",
+            },
+
+            body: JSON.stringify({
+                title,
+            }),
+        });
+
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch {
+            data = {};
+        }
+
+        if (!response.ok || !data.success) {
+            return {
+                success: false,
+
+                message:
+                    data.message ||
+                    data.error ||
+                    "Не удалось переименовать диалог.",
+            };
+        }
+
+        const conversation = conversationsCache.find(
+            (item) => String(item.id) === String(id),
+        );
+
+        if (conversation) {
+            conversation.title = data.conversation?.title ?? title;
+        }
+
+        animateConversationsRender();
+
+        return {
+            success: true,
+        };
+    } catch (error) {
+        console.error("Ошибка переименования диалога:", error);
+
+        return {
+            success: false,
+
+            message: "Не удалось переименовать диалог.",
+        };
+    }
+}
+
+function openRenameConversationModal(id) {
+    const modal = document.getElementById("renameConversationModal");
+
+    const input = document.getElementById("renameConversationInput");
+
+    const counter = document.getElementById("renameConversationCounter");
+
+    const error = document.getElementById("renameConversationError");
+
+    const confirmButton = document.getElementById("confirmRenameConversation");
+
+    if (!modal || !input) {
+        return;
+    }
+
+    const conversation = conversationsCache.find(
+        (item) => String(item.id) === String(id),
+    );
+
+    conversationPendingRename = id;
+
+    input.value = conversation?.title ?? "";
+
+    if (counter) {
+        counter.textContent = String(input.value.length);
+    }
+
+    if (error) {
+        error.textContent = "";
+    }
+
+    if (confirmButton) {
+        confirmButton.disabled = false;
+
+        confirmButton.textContent = "Сохранить";
+    }
+
+    const openedPopover = document.querySelector(
+        ".conversation-settings-panel:popover-open",
+    );
+
+    if (openedPopover && typeof openedPopover.hidePopover === "function") {
+        openedPopover.hidePopover();
+    }
+
+    modal.classList.add("is-open");
+
+    modal.setAttribute("aria-hidden", "false");
+
+    document.body.style.overflow = "hidden";
+
+    requestAnimationFrame(() => {
+        input.focus();
+
+        input.select();
+    });
+}
+
+function closeRenameConversationModal() {
+    const modal = document.getElementById("renameConversationModal");
+
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.remove("is-open");
+
+    modal.setAttribute("aria-hidden", "true");
+
+    document.body.style.overflow = "";
+
+    conversationPendingRename = null;
+
+    const error = document.getElementById("renameConversationError");
+
+    if (error) {
+        error.textContent = "";
+    }
 }
 
 /* =========================================================
@@ -99,7 +249,7 @@ export async function loadConversation(id) {
 }
 
 /* =========================================================
-   ЗАГРУЗКА СПИСКА ДИАЛОГОВ + ПОИСК
+   ЗАГРУЗКА ИСТОРИИ + ПОИСК
    ========================================================= */
 
 export async function loadConversations(search = currentSearch) {
@@ -165,7 +315,7 @@ export async function loadConversations(search = currentSearch) {
 }
 
 /* =========================================================
-   УДАЛЕНИЕ ДИАЛОГА
+   УДАЛЕНИЕ ОДНОГО
    ========================================================= */
 
 export async function deleteConversation(id) {
@@ -222,7 +372,79 @@ export async function deleteConversation(id) {
 }
 
 /* =========================================================
-   РЕЖИМ КОРЗИНЫ
+   ОЧИСТКА ВСЕЙ ИСТОРИИ
+   ========================================================= */
+
+export async function clearConversationHistory() {
+    try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+
+        const response = await fetch("/climate/conversations", {
+            method: "DELETE",
+
+            headers: {
+                "X-CSRF-TOKEN": csrfToken?.content ?? "",
+
+                "X-Requested-With": "XMLHttpRequest",
+
+                Accept: "application/json",
+
+                "Content-Type": "application/json",
+            },
+        });
+
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch {
+            data = {};
+        }
+
+        if (!response.ok || !data.success) {
+            showError("Не удалось очистить историю диалогов");
+
+            return false;
+        }
+
+        state.currentConversationId = null;
+
+        state.isTrashMode = false;
+
+        currentSearch = "";
+
+        conversationsCache = [];
+
+        const searchInput = document.querySelector(".search");
+
+        if (searchInput) {
+            searchInput.value = "";
+        }
+
+        const binIcon = document.querySelector(".bin-icon");
+
+        if (binIcon) {
+            binIcon.style.filter = "";
+        }
+
+        clearChatMessages();
+
+        showWelcome();
+
+        animateConversationsRender();
+
+        return true;
+    } catch (error) {
+        console.error("Ошибка очистки истории:", error);
+
+        showError("Не удалось очистить историю диалогов");
+
+        return false;
+    }
+}
+
+/* =========================================================
+   РЕЖИМ УДАЛЕНИЯ
    ========================================================= */
 
 export function toggleTrashMode() {
@@ -240,8 +462,9 @@ export function toggleTrashMode() {
 }
 
 /* =========================================================
-   АНИМАЦИЯ СОРТИРОВКИ
+   АНИМАЦИЯ
    ========================================================= */
+
 function animateConversationsRender() {
     const scrollContainer = document.querySelector(".scroll_container");
 
@@ -265,7 +488,7 @@ function animateConversationsRender() {
 }
 
 /* =========================================================
-   ПАРСИНГ ДАТЫ
+   ДАТА
    ========================================================= */
 
 function parseRussianDate(dateString) {
@@ -349,7 +572,7 @@ function renderSortedConversations() {
 }
 
 /* =========================================================
-   РЕНДЕР ИСТОРИИ
+   РЕНДЕР
    ========================================================= */
 
 function renderConversations(conversations) {
@@ -372,9 +595,7 @@ function renderConversations(conversations) {
     yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
     const todayConvs = [];
-
     const yesterdayConvs = [];
-
     const olderConvs = [];
 
     conversations.forEach((conv) => {
@@ -403,28 +624,6 @@ function renderConversations(conversations) {
 
     let html = "";
 
-    if (state.isTrashMode) {
-        html += `
-            <div
-                class="trash-mode-header d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded"
-            >
-                <h5 class="mb-0 text-danger">
-                    <i class="fas fa-trash me-2"></i>
-                    Режим удаления
-                </h5>
-
-                <button
-                    type="button"
-                    class="btn btn-sm btn-outline-secondary exit-trash-mode"
-                    title="Выйти из режима удаления"
-                    style="border: none;"
-                >
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        `;
-    }
-
     if (currentSort === "old") {
         html += renderConversationGroup("Ранее", olderConvs, "mt-2");
 
@@ -442,9 +641,7 @@ function renderConversations(conversations) {
     scrollContainer.innerHTML =
         html ||
         `
-            <p
-                class="text-muted text-center mt-3"
-            >
+            <p class="text-muted text-center mt-3">
                 ${currentSearch ? "Ничего не найдено" : "Нет диалогов"}
             </p>
         `;
@@ -453,13 +650,11 @@ function renderConversations(conversations) {
 
     bindConversationClickHandlers();
 
-    bindTrashModeHandlers();
-
     updateDeleteButtonsVisibility();
 }
 
 /* =========================================================
-   ГРУППА ДИАЛОГОВ
+   ГРУППЫ
    ========================================================= */
 
 function renderConversationGroup(title, conversations, marginClass) {
@@ -516,49 +711,7 @@ function bindConversationClickHandlers() {
 }
 
 /* =========================================================
-   СТАРЫЙ TRASH MODE
-   ========================================================= */
-
-function bindTrashModeHandlers() {
-    document.querySelectorAll(".delete-conversation").forEach((btn) => {
-        btn.addEventListener("click", function (event) {
-            event.preventDefault();
-
-            event.stopPropagation();
-
-            const id = this.dataset.id;
-
-            if (!id) {
-                return;
-            }
-
-            openDeleteConversationModal(id);
-        });
-    });
-
-    const exitBtn = document.querySelector(".exit-trash-mode");
-
-    if (exitBtn) {
-        exitBtn.addEventListener("click", function (event) {
-            event.preventDefault();
-
-            event.stopPropagation();
-
-            state.isTrashMode = false;
-
-            renderSortedConversations();
-
-            const binIcon = document.querySelector(".bin-icon");
-
-            if (binIcon) {
-                binIcon.style.filter = "";
-            }
-        });
-    }
-}
-
-/* =========================================================
-   ACTIVE CONVERSATION
+   ACTIVE
    ========================================================= */
 
 function updateActiveConversation() {
@@ -574,7 +727,7 @@ function updateActiveConversation() {
 }
 
 /* =========================================================
-   TRASH MODE VISIBILITY
+   TRASH VISIBILITY
    ========================================================= */
 
 function updateDeleteButtonsVisibility() {
@@ -587,19 +740,7 @@ function updateDeleteButtonsVisibility() {
             return;
         }
 
-        if (state.isTrashMode) {
-            if (btn.parentElement) {
-                btn.parentElement.style.display = "block";
-            }
-
-            conversationItem.classList.add("trash-mode-item");
-        } else {
-            if (btn.parentElement) {
-                btn.parentElement.style.display = "none";
-            }
-
-            conversationItem.classList.remove("trash-mode-item");
-        }
+        conversationItem.classList.toggle("trash-mode-item", state.isTrashMode);
     });
 }
 
@@ -607,16 +748,52 @@ function updateDeleteButtonsVisibility() {
    DELETE MODAL
    ========================================================= */
 
-function openDeleteConversationModal(id) {
+function openDeleteConversationModal(id = null, mode = "single") {
     const modal = document.getElementById("deleteConversationModal");
 
     if (!modal) {
-        console.error("Не найден #deleteConversationModal");
-
         return;
     }
 
-    conversationPendingDelete = id;
+    const title = document.getElementById("deleteConversationTitle");
+
+    const text = modal.querySelector(".delete-modal__text");
+
+    const confirmButton = document.getElementById("confirmDeleteConversation");
+
+    deleteModalMode = mode;
+
+    if (mode === "all") {
+        conversationPendingDelete = null;
+
+        if (title) {
+            title.textContent = "Очистить историю?";
+        }
+
+        if (text) {
+            text.textContent =
+                "Вы уверены, что хотите удалить всю историю диалогов? Это действие нельзя отменить.";
+        }
+
+        if (confirmButton) {
+            confirmButton.textContent = "Да, очистить";
+        }
+    } else {
+        conversationPendingDelete = id;
+
+        if (title) {
+            title.textContent = "Удалить диалог?";
+        }
+
+        if (text) {
+            text.textContent =
+                "Вы уверены, что хотите удалить этот диалог? Это действие нельзя отменить.";
+        }
+
+        if (confirmButton) {
+            confirmButton.textContent = "Да, удалить";
+        }
+    }
 
     const openedPopover = document.querySelector(
         ".conversation-settings-panel:popover-open",
@@ -626,18 +803,20 @@ function openDeleteConversationModal(id) {
         openedPopover.hidePopover();
     }
 
+    const filterPanel = document.getElementById("filterPanel");
+
+    if (filterPanel && typeof filterPanel.hidePopover === "function") {
+        filterPanel.hidePopover();
+    }
+
     modal.classList.add("is-open");
 
     modal.setAttribute("aria-hidden", "false");
 
     document.body.style.overflow = "hidden";
 
-    const confirmButton = document.getElementById("confirmDeleteConversation");
-
     if (confirmButton) {
         confirmButton.disabled = false;
-
-        confirmButton.textContent = "Да, удалить";
 
         confirmButton.focus();
     }
@@ -657,6 +836,8 @@ function closeDeleteConversationModal() {
     document.body.style.overflow = "";
 
     conversationPendingDelete = null;
+
+    deleteModalMode = null;
 }
 
 /* =========================================================
@@ -674,13 +855,25 @@ function createConversationHTML(conv) {
 
     return `
         <div
-            class="conversation-item fade_text w-100 position-relative p-2 mb-1 rounded ${
-                state.isTrashMode ? "trash-mode-item" : ""
-            } ${isActive ? "active" : ""}"
+            class="
+                conversation-item
+                fade_text
+                w-100
+                position-relative
+                p-2
+                mb-1
+                rounded
+                ${isActive ? "active" : ""}
+            "
             data-id="${conv.id}"
         >
+
             <div
-                class="d-flex justify-content-between align-items-start"
+                class="
+                    d-flex
+                    justify-content-between
+                    align-items-start
+                "
             >
 
                 <div
@@ -688,16 +881,24 @@ function createConversationHTML(conv) {
                 >
 
                     <p
-                        class="conversation-title fw-bold mb-1"
+                        class="
+                            conversation-title
+                            fw-bold
+                            mb-1
+                        "
                     >
                         ${escapeHtml(conv.title ?? "Без названия")}
                     </p>
+
 
                     ${
                         conv.last_question
                             ? `
                                 <p
-                                    class="m-0 conversation-text-small"
+                                    class="
+                                        m-0
+                                        conversation-text-small
+                                    "
                                 >
                                     ${escapeHtml(conv.last_question)}
                                 </p>
@@ -705,11 +906,17 @@ function createConversationHTML(conv) {
                             : ""
                     }
 
+
                     ${
                         conv.last_answer_preview
                             ? `
                                 <p
-                                    class="m-0 conversation-text-small text-muted fst-italic"
+                                    class="
+                                        m-0
+                                        conversation-text-small
+                                        text-muted
+                                        fst-italic
+                                    "
                                 >
                                     ${escapeHtml(conv.last_answer_preview)}...
                                 </p>
@@ -719,11 +926,13 @@ function createConversationHTML(conv) {
 
                 </div>
 
+
                 <div
                     class="fade_block"
                 ></div>
 
             </div>
+
 
             <div
                 class="conversation-settings"
@@ -734,29 +943,43 @@ function createConversationHTML(conv) {
                     class="settings-btn"
                     data-conversation-id="${conv.id}"
                     popovertarget="${panelId}"
-                    style="anchor-name: ${anchorName};"
+                    style="
+                        anchor-name:
+                        ${anchorName};
+                    "
                     aria-label="Настройки диалога"
                 >
+
                     <img
                         class="settings_img"
                         src="/icons/dots.svg"
                         alt=""
                     >
+
                 </button>
+
 
                 <div
                     id="${panelId}"
-                    class="conversation-settings-panel"
+                    class="
+                        conversation-settings-panel
+                    "
                     popover="auto"
-                    style="position-anchor: ${anchorName};"
+                    style="
+                        position-anchor:
+                        ${anchorName};
+                    "
                 >
 
                     <button
                         type="button"
-                        class="conversation-settings-panel__item"
+                        class="
+                            conversation-settings-panel__item
+                        "
                         data-action="rename"
                         data-conversation-id="${conv.id}"
                     >
+
                         <img
                             src="/icons/edit.svg"
                             class="conversation_panel_image"
@@ -766,12 +989,17 @@ function createConversationHTML(conv) {
                         Переименовать
                     </button>
 
+
                     <button
                         type="button"
-                        class="conversation-settings-panel__item conversation-settings-panel__item--danger"
+                        class="
+                            conversation-settings-panel__item
+                            conversation-settings-panel__item--danger
+                        "
                         data-action="delete"
                         data-conversation-id="${conv.id}"
                     >
+
                         <img
                             src="/icons/delete.svg"
                             class="conversation_panel_image"
@@ -784,12 +1012,13 @@ function createConversationHTML(conv) {
                 </div>
 
             </div>
+
         </div>
     `;
 }
 
 /* =========================================================
-   ИНИЦИАЛИЗАЦИЯ
+   INIT
    ========================================================= */
 
 export function initConversations() {
@@ -801,12 +1030,30 @@ export function initConversations() {
 
     const searchInput = document.querySelector(".search");
 
+    const clearHistoryButton = document.getElementById(
+        "clearConversationHistory",
+    );
+
     const cancelDeleteButton = document.getElementById(
         "cancelDeleteConversation",
     );
 
     const confirmDeleteButton = document.getElementById(
         "confirmDeleteConversation",
+    );
+
+    const renameInput = document.getElementById("renameConversationInput");
+
+    const renameCounter = document.getElementById("renameConversationCounter");
+
+    const renameError = document.getElementById("renameConversationError");
+
+    const cancelRenameButton = document.getElementById(
+        "cancelRenameConversation",
+    );
+
+    const confirmRenameButton = document.getElementById(
+        "confirmRenameConversation",
     );
 
     if (newChatBtn) {
@@ -849,10 +1096,38 @@ export function initConversations() {
         });
     }
 
+    if (clearHistoryButton) {
+        clearHistoryButton.addEventListener("click", function (event) {
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            openDeleteConversationModal(null, "all");
+        });
+    }
+
     document.addEventListener("click", function (event) {
         const target = event.target;
 
         if (!(target instanceof Element)) {
+            return;
+        }
+
+        const renameButton = target.closest('[data-action="rename"]');
+
+        if (renameButton) {
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            const conversationId = renameButton.dataset.conversationId;
+
+            if (!conversationId) {
+                return;
+            }
+
+            openRenameConversationModal(conversationId);
+
             return;
         }
 
@@ -872,8 +1147,98 @@ export function initConversations() {
             return;
         }
 
-        openDeleteConversationModal(conversationId);
+        openDeleteConversationModal(conversationId, "single");
     });
+
+    if (renameInput) {
+        renameInput.addEventListener("input", function () {
+            if (this.value.length > 30) {
+                this.value = this.value.slice(0, 30);
+            }
+
+            if (renameCounter) {
+                renameCounter.textContent = String(this.value.length);
+            }
+
+            if (renameError) {
+                renameError.textContent = "";
+            }
+        });
+
+        renameInput.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+
+                confirmRenameButton?.click();
+            }
+        });
+    }
+
+    if (cancelRenameButton) {
+        cancelRenameButton.addEventListener(
+            "click",
+            closeRenameConversationModal,
+        );
+    }
+
+    if (confirmRenameButton) {
+        confirmRenameButton.addEventListener("click", async function () {
+            if (conversationPendingRename === null) {
+                return;
+            }
+
+            const title = renameInput?.value.trim() ?? "";
+
+            if (!title) {
+                if (renameError) {
+                    renameError.textContent = "Введите название диалога.";
+                }
+
+                renameInput?.focus();
+
+                return;
+            }
+
+            if (title.length > 30) {
+                if (renameError) {
+                    renameError.textContent =
+                        "Название не должно превышать 30 символов.";
+                }
+
+                renameInput?.focus();
+
+                return;
+            }
+
+            const conversationId = conversationPendingRename;
+
+            this.disabled = true;
+
+            this.textContent = "Сохранение...";
+
+            const result = await renameConversation(conversationId, title);
+
+            if (result.success) {
+                closeRenameConversationModal();
+
+                return;
+            }
+
+            this.disabled = false;
+
+            this.textContent = "Сохранить";
+
+            if (renameError) {
+                renameError.textContent = result.message;
+            }
+        });
+    }
+
+    document
+        .querySelectorAll("[data-rename-modal-close]")
+        .forEach((element) => {
+            element.addEventListener("click", closeRenameConversationModal);
+        });
 
     if (cancelDeleteButton) {
         cancelDeleteButton.addEventListener(
@@ -884,27 +1249,50 @@ export function initConversations() {
 
     if (confirmDeleteButton) {
         confirmDeleteButton.addEventListener("click", async function () {
-            if (conversationPendingDelete === null) {
+            this.disabled = true;
+
+            if (deleteModalMode === "all") {
+                this.textContent = "Очистка...";
+
+                const success = await clearConversationHistory();
+
+                if (success) {
+                    closeDeleteConversationModal();
+
+                    return;
+                }
+
+                this.disabled = false;
+
+                this.textContent = "Да, очистить";
+
                 return;
             }
 
-            const conversationId = conversationPendingDelete;
+            if (
+                deleteModalMode === "single" &&
+                conversationPendingDelete !== null
+            ) {
+                const conversationId = conversationPendingDelete;
 
-            this.disabled = true;
+                this.textContent = "Удаление...";
 
-            this.textContent = "Удаление...";
+                const success = await deleteConversation(conversationId);
 
-            const success = await deleteConversation(conversationId);
+                if (success) {
+                    closeDeleteConversationModal();
 
-            if (success) {
-                closeDeleteConversationModal();
+                    return;
+                }
+
+                this.disabled = false;
+
+                this.textContent = "Да, удалить";
 
                 return;
             }
 
             this.disabled = false;
-
-            this.textContent = "Да, удалить";
         });
     }
 
@@ -919,9 +1307,17 @@ export function initConversations() {
             return;
         }
 
-        const modal = document.getElementById("deleteConversationModal");
+        const renameModal = document.getElementById("renameConversationModal");
 
-        if (modal?.classList.contains("is-open")) {
+        if (renameModal?.classList.contains("is-open")) {
+            closeRenameConversationModal();
+
+            return;
+        }
+
+        const deleteModal = document.getElementById("deleteConversationModal");
+
+        if (deleteModal?.classList.contains("is-open")) {
             closeDeleteConversationModal();
         }
     });

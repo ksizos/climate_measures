@@ -82,6 +82,36 @@ class ClimateController extends Controller
         ]);
     }
 
+    /**
+     * Получить конкретный диалог вместе с сообщениями.
+     */
+    public function getConversation($id)
+    {
+        $conversation =
+            Conversation::where(
+                'user_id',
+                auth()->id()
+            )
+            ->with([
+                'messages' => function ($query) {
+                    $query->orderBy(
+                        'interaction_time',
+                        'asc'
+                    );
+                },
+            ])
+            ->findOrFail($id);
+
+
+        return response()->json([
+            'success' =>
+            true,
+
+            'conversation' =>
+            $conversation,
+        ]);
+    }
+
 
     /**
      * Получить историю диалога.
@@ -930,6 +960,72 @@ class ClimateController extends Controller
     }
 
     /**
+     * Переименовать диалог.
+     */
+    public function renameConversation(
+        Request $request,
+        $id
+    ) {
+        $validated =
+            $request->validate([
+                'title' => [
+                    'required',
+                    'string',
+                    'max:30',
+                ],
+            ]);
+
+
+        $title =
+            trim(
+                $validated['title']
+            );
+
+
+        if ($title === '') {
+            return response()->json(
+                [
+                    'success' =>
+                    false,
+
+                    'message' =>
+                    'Название не может быть пустым.',
+                ],
+                422
+            );
+        }
+
+
+        $conversation =
+            Conversation::where(
+                'user_id',
+                auth()->id()
+            )
+            ->findOrFail($id);
+
+
+        $conversation->title =
+            $title;
+
+
+        $conversation->save();
+
+
+        return response()->json([
+            'success' =>
+            true,
+
+            'conversation' => [
+                'id' =>
+                $conversation->id,
+
+                'title' =>
+                $conversation->title,
+            ],
+        ]);
+    }
+
+    /**
      * Удалить диалог.
      *
      * При использовании SoftDeletes
@@ -954,6 +1050,18 @@ class ClimateController extends Controller
         ]);
     }
 
+    public function clearConversations()
+    {
+        Conversation::where(
+            'user_id',
+            auth()->id()
+        )->delete();
+
+
+        return response()->json([
+            'success' => true,
+        ]);
+    }
 
     /**
      * Одобрить мероприятие.

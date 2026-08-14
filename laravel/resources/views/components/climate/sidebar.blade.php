@@ -1,5 +1,9 @@
-<aside id="sidebar" class="sidebar">
+<aside
+    id="sidebar"
+    class="sidebar">
+
     <div class="sidebar-toggle-wrapper">
+
         <button
             type="button"
             class="aside_img_block shadow-sm"
@@ -12,39 +16,79 @@
                 class="aside_img"
                 src="{{ asset('icons/arrow.svg') }}"
                 alt="">
+
         </button>
+
     </div>
 
+
     <div class="sidebar-content">
-        <div class="d-flex flex-column justify-content-between h-100">
+
+        <div
+            class="
+                d-flex
+                flex-column
+                justify-content-between
+                h-100
+            ">
+
             <div>
 
                 <div class="sidebar-header mb-4">
+
                     <a
                         href="{{ route('climate.index') }}"
-                        class="logo d-flex align-items-center justify-content-center">
+                        class="
+                            logo
+                            d-flex
+                            align-items-center
+                            justify-content-center
+                        ">
 
                         <img
                             class="logo_img"
                             src="{{ asset('icons/logo.svg') }}"
                             alt="Лого">
+
                     </a>
+
                 </div>
 
-                <div class="d-flex justify-content-between align-items-center mb-3">
+
+                <div
+                    class="
+                        d-flex
+                        justify-content-between
+                        align-items-center
+                        mb-3
+                    ">
 
                     <div
-                        class="d-flex align-items-center justify-content-start gap-3 new-chat-block shadow-sm">
+                        class="
+                            d-flex
+                            align-items-center
+                            justify-content-start
+                            gap-3
+                            new-chat-block
+                            shadow-sm
+                        ">
 
                         <img
                             class="new-chat-btn"
                             src="{{ asset('icons/plus.svg') }}"
                             alt="Создать">
 
-                        <p class="new-chat-text m-0 p-0">
+                        <p
+                            class="
+                                new-chat-text
+                                m-0
+                                p-0
+                            ">
                             Новый диалог
                         </p>
+
                     </div>
+
 
                     <div class="filter-wrapper">
 
@@ -59,11 +103,13 @@
                                 class="filter-btn"
                                 src="{{ asset('icons/filter.svg') }}"
                                 alt="Фильтр">
+
                         </button>
+
 
                         <div
                             id="filterPanel"
-                            class="filter-panel p-2"
+                            class="filter-panel py-2 px-3"
                             popover="auto"
                             style="position-anchor: --filter-button;">
 
@@ -71,13 +117,24 @@
                                 Настройки истории
                             </p>
 
-                            <div class="filter-sort d-flex align-items-stretch justify-content-start flex-column">
+
+                            <div
+                                class="
+                                    filter-sort
+                                    d-flex
+                                    align-items-stretch
+                                    justify-content-start
+                                    flex-column
+                                ">
 
                                 <label
                                     for="conversationSort"
                                     class="filter-sort__label mb-1">
+
                                     Сортировка
+
                                 </label>
+
 
                                 <select
                                     id="conversationSort"
@@ -90,11 +147,23 @@
                                     <option value="old">
                                         Сначала старые
                                     </option>
+
                                 </select>
+
 
                                 <button
                                     type="button"
-                                    class="filter_button d-flex align-items-center justify-content-center gap-2 mt-3 px-3 py-2">
+                                    id="clearConversationHistory"
+                                    class="
+                                        filter_button
+                                        d-flex
+                                        align-items-center
+                                        justify-content-center
+                                        gap-2
+                                        mt-3
+                                        px-3
+                                        py-2
+                                    ">
 
                                     <img
                                         class="filter-btn-img"
@@ -102,14 +171,26 @@
                                         alt="">
 
                                     Очистить всю историю
+
                                 </button>
 
                             </div>
+
                         </div>
+
                     </div>
+
                 </div>
 
-                <div class="position-relative d-flex align-items-center justify-content-center mb-2">
+
+                <div
+                    class="
+                        position-relative
+                        d-flex
+                        align-items-center
+                        justify-content-center
+                        mb-2
+                    ">
 
                     <img
                         src="{{ asset('icons/search.png') }}"
@@ -120,10 +201,14 @@
                         type="search"
                         class="search w-100 m-0"
                         placeholder="Поиск в истории запросов...">
+
                 </div>
 
+
                 <div class="scroll_container"></div>
+
             </div>
+
 
             <a
                 href="https://clck.ru/3Rti7j"
@@ -131,7 +216,16 @@
                 target="_blank"
                 rel="noopener noreferrer">
 
-                <div class="help_button ps-2 py-2 d-flex justify-content-start align-items-center gap-2">
+                <div
+                    class="
+                        help_button
+                        ps-2
+                        py-2
+                        d-flex
+                        justify-content-start
+                        align-items-center
+                        gap-2
+                    ">
 
                     <img
                         class="input_img"
@@ -139,11 +233,21 @@
                         alt="">
 
                     Помощь
+
                 </div>
+
             </a>
+
         </div>
+
     </div>
+
 </aside>
+
+
+{{-- ========================================================
+     УДАЛЕНИЕ
+   ======================================================== --}}
 
 <div
     id="deleteConversationModal"
@@ -155,6 +259,7 @@
         data-delete-modal-close>
     </div>
 
+
     <div
         class="delete-modal__dialog"
         role="dialog"
@@ -162,41 +267,152 @@
         aria-labelledby="deleteConversationTitle">
 
         <div class="delete-modal__icon">
+
             <img
                 src="{{ asset('icons/delete.svg') }}"
                 alt="">
+
         </div>
+
 
         <h3
             id="deleteConversationTitle"
             class="delete-modal__title">
+
             Удалить диалог?
+
         </h3>
 
+
         <p class="delete-modal__text">
+
             Вы уверены, что хотите удалить этот диалог?
             Это действие нельзя отменить.
+
         </p>
+
 
         <div class="delete-modal__actions">
 
             <button
                 type="button"
                 id="cancelDeleteConversation"
-                class="delete-modal__button delete-modal__button--cancel">
+                class="
+                    delete-modal__button
+                    delete-modal__button--cancel
+                ">
 
                 Нет
+
             </button>
+
 
             <button
                 type="button"
                 id="confirmDeleteConversation"
-                class="delete-modal__button delete-modal__button--confirm">
+                class="
+                    delete-modal__button
+                    delete-modal__button--confirm
+                ">
 
                 Да, удалить
+
             </button>
 
         </div>
 
     </div>
+
+</div>
+
+
+{{-- ========================================================
+     ПЕРЕИМЕНОВАНИЕ
+   ======================================================== --}}
+
+<div
+    id="renameConversationModal"
+    class="rename-modal"
+    aria-hidden="true">
+
+    <div
+        class="rename-modal__backdrop"
+        data-rename-modal-close>
+    </div>
+
+
+    <div
+        class="rename-modal__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="renameConversationTitle">
+
+        <h3
+            id="renameConversationTitle"
+            class="rename-modal__title">
+
+            Переименовать диалог
+
+        </h3>
+
+
+        <div class="rename-modal__field">
+
+            <input
+                type="text"
+                id="renameConversationInput"
+                class="rename-modal__input"
+                maxlength="30"
+                autocomplete="off"
+                placeholder="Название диалога">
+
+
+            <div class="rename-modal__counter">
+
+                <span id="renameConversationCounter">
+                    0
+                </span>/30
+
+            </div>
+
+        </div>
+
+
+        <div
+            id="renameConversationError"
+            class="rename-modal__error">
+        </div>
+
+
+        <div class="rename-modal__actions">
+
+            <button
+                type="button"
+                id="cancelRenameConversation"
+                class="
+                    rename-modal__button
+                    rename-modal__button--cancel
+                ">
+
+                Отмена
+
+            </button>
+
+
+            <button
+                type="button"
+                id="confirmRenameConversation"
+                class="
+                    rename-modal__button
+                    rename-modal__button--confirm
+                ">
+
+                Сохранить
+
+            </button>
+
+        </div>
+
+    </div>
+
 </div>

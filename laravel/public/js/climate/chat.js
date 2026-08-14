@@ -18,9 +18,10 @@ let currentAnswerElement = null;
 
 let isGenerating = false;
 
-/**
- * Инициализация чата.
- */
+/* =========================================================
+   ИНИЦИАЛИЗАЦИЯ
+   ========================================================= */
+
 export function initChat() {
     const questionInput = document.getElementById("question");
 
@@ -63,9 +64,10 @@ export function initChat() {
     questionInput.focus();
 }
 
-/**
- * Уникальный ID генерации.
- */
+/* =========================================================
+   REQUEST ID
+   ========================================================= */
+
 function createRequestId() {
     if (
         typeof crypto !== "undefined" &&
@@ -77,9 +79,10 @@ function createRequestId() {
     return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
 }
 
-/**
- * Переключение submit / stop.
- */
+/* =========================================================
+   СОСТОЯНИЕ ГЕНЕРАЦИИ
+   ========================================================= */
+
 function setGeneratingState(generating) {
     const submitBtn = document.getElementById("submitBtn");
 
@@ -108,9 +111,10 @@ function setGeneratingState(generating) {
     submitBtn.disabled = !questionInput?.value.trim();
 }
 
-/**
- * Команда STOP на сервер.
- */
+/* =========================================================
+   CANCEL SERVER GENERATION
+   ========================================================= */
+
 async function cancelServerGeneration(requestId) {
     if (!requestId) {
         return;
@@ -137,13 +141,16 @@ async function cancelServerGeneration(requestId) {
             }),
         });
     } catch {
-        // Ошибка STOP не отображается пользователю.
+        // STOP не должен
+        // создавать дополнительную
+        // пользовательскую ошибку.
     }
 }
 
-/**
- * Остановка генерации.
- */
+/* =========================================================
+   STOP
+   ========================================================= */
+
 async function stopGeneration() {
     if (!isGenerating) {
         return;
@@ -155,6 +162,9 @@ async function stopGeneration() {
 
     const answerElement = currentAnswerElement;
 
+    /*
+     * Сначала отвязываем текущий запрос.
+     */
     currentRequestId = null;
 
     currentRequestController = null;
@@ -163,11 +173,17 @@ async function stopGeneration() {
 
     setGeneratingState(false);
 
+    /*
+     * Меняем loading
+     * на сообщение STOP.
+     */
     if (answerElement) {
         const messageContent = answerElement.querySelector(".message-content");
 
         if (messageContent) {
             messageContent.classList.remove("processing-content");
+
+            messageContent.classList.add("markdown-content");
 
             messageContent.innerHTML = `
                 <span class="generation-stopped">
@@ -177,6 +193,10 @@ async function stopGeneration() {
         }
     }
 
+    /*
+     * Сначала сообщаем Python,
+     * затем abort браузерного запроса.
+     */
     await cancelServerGeneration(requestId);
 
     if (controller) {
@@ -188,9 +208,10 @@ async function stopGeneration() {
     questionInput?.focus();
 }
 
-/**
- * Очистка сообщений.
- */
+/* =========================================================
+   ОЧИСТКА ЧАТА
+   ========================================================= */
+
 export function clearChatMessages() {
     const chatMessages = document.getElementById("chatMessages");
 
@@ -201,9 +222,10 @@ export function clearChatMessages() {
     chatMessages.innerHTML = "";
 }
 
-/**
- * Добавление пары вопрос + ответ.
- */
+/* =========================================================
+   ДОБАВЛЕНИЕ ПАРЫ СООБЩЕНИЙ
+   ========================================================= */
+
 export function addQuestionAnswerPair(question, answer, status = "success") {
     const chatMessages = document.getElementById("chatMessages");
 
@@ -214,6 +236,9 @@ export function addQuestionAnswerPair(question, answer, status = "success") {
         };
     }
 
+    /*
+     * USER MESSAGE
+     */
     const questionDiv = document.createElement("div");
 
     questionDiv.className = "message user-message fade-in";
@@ -226,22 +251,32 @@ export function addQuestionAnswerPair(question, answer, status = "success") {
 
     chatMessages.appendChild(questionDiv);
 
+    /*
+     * ASSISTANT MESSAGE
+     */
     const answerDiv = document.createElement("div");
 
     answerDiv.className = "message assistant-message fade-in mt-2";
 
     chatMessages.appendChild(answerDiv);
 
+    /*
+     * ERROR
+     */
     if (status === "error") {
         answerDiv.innerHTML = `
             <div
                 class="message-content markdown-content"
             >
                 <span class="text-danger">
-                    ${escapeHtml(answer || "")}
+                    ${escapeHtml(answer || "Произошла ошибка.")}
                 </span>
             </div>
         `;
+
+        /*
+         * STOPPED
+         */
     } else if (status === "stopped") {
         answerDiv.innerHTML = `
             <div
@@ -252,20 +287,44 @@ export function addQuestionAnswerPair(question, answer, status = "success") {
                 </span>
             </div>
         `;
+
+        /*
+         * SUCCESS
+         */
     } else {
-        const markdownHTML = marked.parse(answer || "");
+        const normalizedAnswer = String(answer ?? "").trim();
 
-        const safeHTML = addTargetBlankToLinks(markdownHTML);
+        /*
+         * Дополнительная защита
+         * при загрузке старых
+         * пустых сообщений.
+         */
+        if (!normalizedAnswer) {
+            answerDiv.innerHTML = `
+                <div
+                    class="message-content markdown-content"
+                >
+                    <span class="text-danger">
+                        Модель не вернула ответ.
+                        Попробуйте повторить запрос.
+                    </span>
+                </div>
+            `;
+        } else {
+            const markdownHTML = marked.parse(normalizedAnswer);
 
-        answerDiv.innerHTML = `
-            <div
-                class="message-content markdown-content"
-            >
-                ${safeHTML}
-            </div>
-        `;
+            const safeHTML = addTargetBlankToLinks(markdownHTML);
 
-        setupAnswerActions(answerDiv);
+            answerDiv.innerHTML = `
+                <div
+                    class="message-content markdown-content"
+                >
+                    ${safeHTML}
+                </div>
+            `;
+
+            setupAnswerActions(answerDiv);
+        }
     }
 
     scrollToBottom();
@@ -276,9 +335,10 @@ export function addQuestionAnswerPair(question, answer, status = "success") {
     };
 }
 
-/**
- * Кнопки экспорта в ответах.
- */
+/* =========================================================
+   ACTIONS ДЛЯ ОТВЕТА
+   ========================================================= */
+
 function setupAnswerActions(answerDiv) {
     if (!answerDiv) {
         return;
@@ -365,9 +425,10 @@ function setupAnswerActions(answerDiv) {
     }
 }
 
-/**
- * Отправка сообщения.
- */
+/* =========================================================
+   ОТПРАВКА СООБЩЕНИЯ
+   ========================================================= */
+
 async function sendMessage() {
     if (isGenerating) {
         return;
@@ -389,6 +450,10 @@ async function sendMessage() {
 
     state.lastQuestion = question;
 
+    /*
+     * Сначала показываем
+     * пользовательский вопрос.
+     */
     const pairElements = addQuestionAnswerPair(question, "");
 
     if (!pairElements.questionDiv || !pairElements.answerDiv) {
@@ -397,6 +462,10 @@ async function sendMessage() {
 
     currentAnswerElement = pairElements.answerDiv;
 
+    /*
+     * Loading внутри
+     * assistant-message.
+     */
     pairElements.answerDiv.innerHTML = `
         <div
             class="
@@ -453,6 +522,8 @@ async function sendMessage() {
             headers: {
                 "Content-Type": "application/json",
 
+                Accept: "application/json",
+
                 "X-CSRF-TOKEN": csrfToken,
 
                 "X-Requested-With": "XMLHttpRequest",
@@ -463,6 +534,10 @@ async function sendMessage() {
             signal: controller.signal,
         });
 
+        /*
+         * Запрос уже отменён
+         * или был заменён другим.
+         */
         if (currentRequestId !== requestId) {
             return;
         }
@@ -485,22 +560,58 @@ async function sendMessage() {
 
         /*
          * conversation_id сохраняем
-         * независимо от success.
+         * даже при error.
+         *
+         * Иначе после ошибки следующий
+         * вопрос создаст новый диалог.
          */
         if (data.conversation_id) {
             state.currentConversationId = data.conversation_id;
         }
 
+        /*
+         * =====================================================
+         * SUCCESS
+         * =====================================================
+         */
+
         if (data.success) {
+            const answer = String(data.answer ?? "").trim();
+
             const messageContent =
                 pairElements.answerDiv.querySelector(".message-content");
+
+            /*
+             * Дополнительная frontend-защита
+             * от success=true + answer="".
+             */
+            if (!answer) {
+                if (messageContent) {
+                    messageContent.classList.remove("processing-content");
+
+                    messageContent.classList.add("markdown-content");
+
+                    messageContent.innerHTML = `
+                        <span class="text-danger">
+                            Модель не вернула ответ.
+                            Попробуйте повторить запрос.
+                        </span>
+                    `;
+                }
+
+                await loadConversations();
+
+                scrollToElement(pairElements.answerDiv);
+
+                return;
+            }
 
             if (messageContent) {
                 messageContent.classList.remove("processing-content");
 
                 messageContent.classList.add("markdown-content");
 
-                const markdownHTML = marked.parse(data.answer || "");
+                const markdownHTML = marked.parse(answer);
 
                 const safeHTML = addTargetBlankToLinks(markdownHTML);
 
@@ -515,6 +626,12 @@ async function sendMessage() {
 
             return;
         }
+
+        /*
+         * =====================================================
+         * ERROR ОТ LARAVEL
+         * =====================================================
+         */
 
         const messageContent =
             pairElements.answerDiv.querySelector(".message-content");
@@ -532,14 +649,16 @@ async function sendMessage() {
         }
 
         /*
-         * Ошибочный запрос тоже
-         * сохранён в БД,
-         * поэтому обновляем sidebar.
+         * Ошибка тоже сохранена
+         * в messages.
          */
         await loadConversations();
 
         scrollToElement(pairElements.answerDiv);
     } catch (err) {
+        /*
+         * STOP через AbortController.
+         */
         if (err.name === "AbortError") {
             return;
         }
@@ -548,6 +667,15 @@ async function sendMessage() {
             return;
         }
 
+        /*
+         * Эта ветка нужна, если
+         * невозможно обратиться уже
+         * к самому Laravel.
+         *
+         * Python-ошибки сюда обычно
+         * не попадут — Laravel их
+         * преобразует в JSON.
+         */
         const messageContent =
             pairElements.answerDiv?.querySelector(".message-content");
 
@@ -558,14 +686,27 @@ async function sendMessage() {
 
             messageContent.innerHTML = `
                 <span class="text-danger">
-                    Ошибка:
-                    ${escapeHtml(err.message)}
+                    ${escapeHtml(err.message || "Не удалось выполнить запрос.")}
                 </span>
             `;
         }
 
-        await loadConversations();
+        /*
+         * Пробуем обновить историю,
+         * если Laravel всё-таки доступен.
+         */
+        try {
+            await loadConversations();
+        } catch {
+            // Ничего не делаем.
+        }
+
+        scrollToElement(pairElements.answerDiv);
     } finally {
+        /*
+         * Сбрасываем состояние только
+         * если это всё ещё тот же запрос.
+         */
         if (currentRequestId === requestId) {
             currentRequestId = null;
 
@@ -578,9 +719,10 @@ async function sendMessage() {
     }
 }
 
-/**
- * Карточки примеров.
- */
+/* =========================================================
+   КАРТОЧКИ ПРИМЕРОВ
+   ========================================================= */
+
 document.querySelectorAll(".example_card").forEach((card) => {
     card.addEventListener("click", () => {
         const question = card.dataset.question;

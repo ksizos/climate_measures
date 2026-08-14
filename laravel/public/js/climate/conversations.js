@@ -18,6 +18,12 @@ let currentSort = "new";
 
 let conversationPendingDelete = null;
 
+let currentSearch = "";
+
+let searchTimeout = null;
+
+let conversationsRequestController = null;
+
 /* =========================================================
    НОВЫЙ ДИАЛОГ
    ========================================================= */
@@ -45,14 +51,20 @@ export async function startNewConversation() {
 }
 
 /* =========================================================
-   ЗАГРУЗКА ДИАЛОГА
+   ЗАГРУЗКА КОНКРЕТНОГО ДИАЛОГА
    ========================================================= */
 
 export async function loadConversation(id) {
     try {
         hideError();
 
-        const response = await fetch(`/climate/conversation/${id}`);
+        const response = await fetch(`/climate/conversation/${id}`, {
+            headers: {
+                Accept: "application/json",
+
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        });
 
         const data = await response.json();
 
@@ -87,6 +99,72 @@ export async function loadConversation(id) {
 }
 
 /* =========================================================
+   ЗАГРУЗКА СПИСКА ДИАЛОГОВ + ПОИСК
+   ========================================================= */
+
+export async function loadConversations(search = currentSearch) {
+    let requestController = null;
+
+    try {
+        currentSearch = String(search ?? "").trim();
+
+        if (conversationsRequestController) {
+            conversationsRequestController.abort();
+        }
+
+        requestController = new AbortController();
+
+        conversationsRequestController = requestController;
+
+        const params = new URLSearchParams();
+
+        if (currentSearch) {
+            params.set("search", currentSearch);
+        }
+
+        const url = params.toString()
+            ? `/climate/conversations?${params.toString()}`
+            : "/climate/conversations";
+
+        const response = await fetch(url, {
+            headers: {
+                Accept: "application/json",
+
+                "X-Requested-With": "XMLHttpRequest",
+            },
+
+            signal: requestController.signal,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            showError("Не удалось загрузить историю диалогов");
+
+            return;
+        }
+
+        conversationsCache = Array.isArray(data.conversations)
+            ? data.conversations
+            : [];
+
+        animateConversationsRender();
+    } catch (error) {
+        if (error.name === "AbortError") {
+            return;
+        }
+
+        console.error("Ошибка загрузки диалогов:", error);
+
+        showError("Ошибка загрузки истории диалогов");
+    } finally {
+        if (conversationsRequestController === requestController) {
+            conversationsRequestController = null;
+        }
+    }
+}
+
+/* =========================================================
    УДАЛЕНИЕ ДИАЛОГА
    ========================================================= */
 
@@ -108,7 +186,7 @@ export async function deleteConversation(id) {
             },
         });
 
-        let data = null;
+        let data = {};
 
         try {
             data = await response.json();
@@ -150,7 +228,7 @@ export async function deleteConversation(id) {
 export function toggleTrashMode() {
     state.isTrashMode = !state.isTrashMode;
 
-    animateSortedConversations();
+    animateConversationsRender();
 
     const binIcon = document.querySelector(".bin-icon");
 
@@ -164,8 +242,7 @@ export function toggleTrashMode() {
 /* =========================================================
    АНИМАЦИЯ СОРТИРОВКИ
    ========================================================= */
-
-function animateSortedConversations() {
+function animateConversationsRender() {
     const scrollContainer = document.querySelector(".scroll_container");
 
     if (!scrollContainer) {
@@ -180,13 +257,15 @@ function animateSortedConversations() {
         renderSortedConversations();
 
         requestAnimationFrame(() => {
-            scrollContainer.classList.remove("is-sorting");
+            requestAnimationFrame(() => {
+                scrollContainer.classList.remove("is-sorting");
+            });
         });
     }, 180);
 }
 
 /* =========================================================
-   ДАТА
+   ПАРСИНГ ДАТЫ
    ========================================================= */
 
 function parseRussianDate(dateString) {
@@ -267,40 +346,6 @@ function renderSortedConversations() {
     const sorted = sortConversations(conversationsCache);
 
     renderConversations(sorted);
-}
-
-/* =========================================================
-   ЗАГРУЗКА ИСТОРИИ
-   ========================================================= */
-
-export async function loadConversations() {
-    try {
-        const response = await fetch("/climate/conversations", {
-            headers: {
-                Accept: "application/json",
-
-                "X-Requested-With": "XMLHttpRequest",
-            },
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-            showError("Не удалось загрузить историю диалогов");
-
-            return;
-        }
-
-        conversationsCache = Array.isArray(data.conversations)
-            ? data.conversations
-            : [];
-
-        renderSortedConversations();
-    } catch (error) {
-        console.error("Ошибка загрузки диалогов:", error);
-
-        showError("Ошибка загрузки истории диалогов");
-    }
 }
 
 /* =========================================================
@@ -400,7 +445,7 @@ function renderConversations(conversations) {
             <p
                 class="text-muted text-center mt-3"
             >
-                Нет диалогов
+                ${currentSearch ? "Ничего не найдено" : "Нет диалогов"}
             </p>
         `;
 
@@ -754,6 +799,8 @@ export function initConversations() {
 
     const conversationSort = document.getElementById("conversationSort");
 
+    const searchInput = document.querySelector(".search");
+
     const cancelDeleteButton = document.getElementById(
         "cancelDeleteConversation",
     );
@@ -776,7 +823,29 @@ export function initConversations() {
         conversationSort.addEventListener("change", function () {
             currentSort = this.value;
 
-            animateSortedConversations();
+            animateConversationsRender();
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener("input", function () {
+            clearTimeout(searchTimeout);
+
+            const value = this.value.trim();
+
+            searchTimeout = setTimeout(() => {
+                currentSearch = value;
+
+                loadConversations(currentSearch);
+            }, 300);
+        });
+
+        searchInput.addEventListener("search", function () {
+            clearTimeout(searchTimeout);
+
+            currentSearch = this.value.trim();
+
+            loadConversations(currentSearch);
         });
     }
 

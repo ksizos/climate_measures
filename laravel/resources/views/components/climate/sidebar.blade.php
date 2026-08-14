@@ -119,7 +119,7 @@
                     <input
                         type="search"
                         class="search w-100 m-0"
-                        placeholder="Поиск в истории...">
+                        placeholder="Поиск в истории запросов...">
                 </div>
 
                 <div class="scroll_container"></div>

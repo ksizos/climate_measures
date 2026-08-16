@@ -1,254 +1,88 @@
-from __future__ import annotations
-
-import logging
-import re
-from urllib.parse import urlparse
-
-from infrastructure.llm.providers.yandex_web_search import (
-    WebSearchResult,
-    WebSearchSource,
-    search_web,
-)
-
-logger = logging.getLogger(__name__)
-
-_URL_PATTERN = re.compile(
-    r"https?://[^\s)\]}>,]+"
-    r"|(?<![\w/])(?:[\w-]+\.)+[a-zA-Z]{2,}"
-    r"(?:/[^\s)\]}>,]*)?"
-)
-
-def _normalize_domain(
-    value: str,
-) -> str:
-    return (
-        value.strip()
-        .lower()
-        .removeprefix("https://")
-        .removeprefix("http://")
-        .rstrip("/")
-    )
+from infrastructure.llm.providers.google_web_search import search_google
 
 
-def _domain_matches(
-    url: str,
-    allowed_domains: list[str],
-) -> bool:
-    host = (
-        urlparse(url).hostname
-        or ""
-    ).lower()
+# обновленный с гугл поиском
+def _clean_source_title(title: str) -> str:
+    suffix = " Страница откроется в новой вкладке."
 
-    for domain in allowed_domains:
-        normalized_domain = _normalize_domain(
-            domain
-        )
+    if title.endswith(suffix):
+        title = title[:-len(suffix)]
 
-        if (
-            host == normalized_domain
-            or host.endswith(
-                "." + normalized_domain
-            )
-        ):
-            return True
-
-    return False
-
-
-def _remove_urls(
-    text: str,
-) -> str:
-    """
-    Убирает URL из контекста для NVIDIA.
-    """
-
-    return _URL_PATTERN.sub(
-        "[ссылка добавляется программно]",
-        text,
-    )
-
-
-def _deduplicate_sources(
-    sources: list[WebSearchSource],
-) -> list[WebSearchSource]:
-    result: list[WebSearchSource] = []
-    seen_urls: set[str] = set()
-
-    for source in sources:
-        normalized_url = (
-            source.url.strip().rstrip("/")
-        )
-
-        if not normalized_url:
-            continue
-
-        if normalized_url in seen_urls:
-            continue
-
-        seen_urls.add(normalized_url)
-
-        result.append(
-            WebSearchSource(
-                url=normalized_url,
-                title=source.title.strip(),
-            )
-        )
-
-    return result
+    return title.strip()
 
 
 def perform_web_search(
-    query: str,
-    *,
-    instructions: str | None = None,
-    allowed_domains: list[str] | None = None,
-    max_output_tokens: int = 2200,
-) -> WebSearchResult:
-    """
-    Выполняет внешний поиск через Yandex.
-
-    При ошибке возвращает безопасный пустой результат,
-    чтобы агент мог продолжить работу с PGVector.
-    """
-
+        query: str,
+        instructions: str | None = None,
+        allowed_domains: list[str] | None = None,
+        max_output_tokens: int | None = None,
+):
     try:
-        result = search_web(
-            query=query,
-            instructions=instructions,
-            allowed_domains=allowed_domains,
-            temperature=0.1,
-            max_output_tokens=max_output_tokens,
-        )
+        result = search_google(query)
 
-        sources = _deduplicate_sources(
-            result.sources
-        )
+        ai_overview = result.get("ai_overview")
 
-        if allowed_domains:
-            filtered_sources = [
-                source
-                for source in sources
-                if _domain_matches(
-                    source.url,
-                    allowed_domains,
-                )
+        if not ai_overview:
+            return (
+                "Результаты веб-поиска не содержат AI-обзор.",
+                []
+            )
+
+        text = (ai_overview.get("text") or "").strip()
+        sources = ai_overview.get("sources") or []
+
+        context_parts = []
+
+        if text:
+            context_parts.append(
+                f"Текст ИИ-обзора веб-поиска:\n{text}"
+            )
+
+        if sources:
+            source_lines = [
+                "Использованные источники:"
             ]
 
-            # Используем отфильтрованные источники,
-            # даже если список оказался пустым.
-            # Это не позволит неофициальным источникам
-            # пройти в ответ при строгом allowlist.
-            sources = filtered_sources
+            seen_urls = set()
 
-        logger.info(
-            "Web Search завершён: "
-            "query=%s, used=%s, sources=%s",
-            query[:200],
-            result.used_web_search,
-            len(sources),
-        )
+            for source in sources:
+                url = (source.get("url") or "").strip()
 
-        return WebSearchResult(
-            query=result.query,
-            text=result.text,
-            sources=sources,
-            used_web_search=result.used_web_search,
-            response_id=result.response_id,
-            raw_response=result.raw_response,
-        )
+                if not url or url in seen_urls:
+                    continue
+
+                seen_urls.add(url)
+
+                title = _clean_source_title(
+                    source.get("title") or ""
+                )
+
+                if title:
+                    source_lines.append(
+                        f"- {title}: {url}"
+                    )
+                else:
+                    source_lines.append(
+                        f"- {url}"
+                    )
+
+            if len(source_lines) > 1:
+                context_parts.append(
+                    "\n".join(source_lines)
+                )
+
+        if not context_parts:
+            return (
+                "Веб-поиск не вернул содержательных результатов.",
+                []
+            )
+        print("Результат веб-поиска:" + "\n\n".join(context_parts) + sources)  # УДАЛИТЬ ПОСЛЕ ОТЛАДКИ
+        return "\n\n".join(context_parts), sources
 
     except Exception:
-        logger.exception(
-            "Ошибка внешнего Web Search"
+        return (
+            "Веб-поиск временно недоступен. "
+            "Используй локальную базу знаний.",
+            []
         )
 
-        return WebSearchResult(
-            query=query,
-            text=(
-                "Внешний веб-поиск временно "
-                "недоступен. Используй локальную "
-                "векторную базу. Не делай вывод, "
-                "что документы или ресурсы отсутствуют."
-            ),
-            sources=[],
-            used_web_search=False,
-            response_id=None,
-            raw_response=None,
-        )
-
-
-def build_web_facts_context(
-    result: WebSearchResult,
-) -> str:
-    """
-    Формирует фактический контекст без URL.
-    """
-
-    clean_text = _remove_urls(
-        result.text.strip()
-    )
-
-    parts = [
-        "Результат внешнего веб-поиска:",
-        clean_text,
-    ]
-
-    if result.sources:
-        source_markers = []
-
-        for index, source in enumerate(
-            result.sources,
-            start=1,
-        ):
-            title = (
-                source.title
-                or "Внешний источник"
-            )
-
-            source_markers.append(
-                f"[WEB-{index}] {title}"
-            )
-
-        parts.extend(
-            [
-                "",
-                "Идентификаторы веб-источников:",
-                "\n".join(source_markers),
-            ]
-        )
-
-    return "\n".join(parts).strip()
-
-
-def append_exact_web_sources(
-    answer: str,
-    result: WebSearchResult,
-) -> str:
-    """
-    Добавляет точные URL после генерации NVIDIA.
-    """
-
-    if not result.sources:
-        return answer.strip()
-
-    lines = [
-        answer.strip(),
-        "",
-        "### Источники веб-поиска",
-    ]
-
-    for index, source in enumerate(
-        result.sources,
-        start=1,
-    ):
-        title = (
-            source.title
-            or f"Веб-источник {index}"
-        )
-
-        lines.append(
-            f"{index}. {title}\n"
-            f"   {source.url}"
-        )
-
-    return "\n".join(lines)

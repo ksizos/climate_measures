@@ -43,7 +43,7 @@ OFFICIAL_RESOURCE_DOMAINS = [
     "climateknowledgeportal.worldbank.org",
 ]
 
-
+# АСИНХРОННО?
 def generate_internet_resources_response(
     user_question: str,
     conversation_history: str | None = None,

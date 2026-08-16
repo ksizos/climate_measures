@@ -59,7 +59,7 @@ def generate_method_docs_response(
         top_k=4,
     )
 
-    web_result = perform_web_search(
+    '''web_result = perform_web_search(
         query=f"""
 Найди официальные методические рекомендации,
 руководства, доклады и аналитические документы
@@ -84,8 +84,9 @@ def generate_method_docs_response(
             METHOD_DOCS_ALLOWED_DOMAINS
         ),
         max_output_tokens=2400,
-    )
-
+    )'''
+    web_result = perform_web_search(
+        query=user_question)
     history_block = ""
 
     if conversation_history:
@@ -93,7 +94,7 @@ def generate_method_docs_response(
             "История диалога:\n"
             f"{conversation_history}\n\n"
         )
-
+# ПОМЕНЯТЬ ПО ПОВОДУ ИСТОЧНИКОВ!
     final_user_prompt = f"""
 {history_block}
 Вопрос пользователя:

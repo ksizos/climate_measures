@@ -18,7 +18,6 @@ from services.vector_context_service import (
 )
 from services.web_search_service import (
     append_exact_web_sources,
-    build_web_facts_context,
     perform_web_search,
 )
 
@@ -59,7 +58,7 @@ def generate_npa_response(
         top_k=4,
     )
 
-    web_result = perform_web_search(
+    '''web_result = perform_web_search(
         query=f"""
 Найди действующие нормативно-правовые акты
 по следующему вопросу:
@@ -82,7 +81,10 @@ def generate_npa_response(
         ),
         allowed_domains=NPA_ALLOWED_DOMAINS,
         max_output_tokens=2400,
-    )
+    )'''
+
+    web_result = perform_web_search(
+        query=user_question)
 
     history_block = ""
 
@@ -91,7 +93,7 @@ def generate_npa_response(
             "История диалога:\n"
             f"{conversation_history}\n\n"
         )
-
+# ПОМЕНЯТЬ - ЧТОБЫ САМ ВЫБИРАЛ ССЫЛКИ!
     final_user_prompt = f"""
 {history_block}
 Вопрос пользователя:
@@ -99,7 +101,7 @@ def generate_npa_response(
 
 {local_result.to_context()}
 
-{build_web_facts_context(web_result)}
+{web_result}
 
 Подготовь единый ответ.
 

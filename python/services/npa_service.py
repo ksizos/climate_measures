@@ -17,7 +17,7 @@ from services.vector_context_service import (
     retrieve_vector_context,
 )
 from services.web_search_service import (
-    append_exact_web_sources,
+    #append_exact_web_sources,
     perform_web_search,
 )
 

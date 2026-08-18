@@ -43,15 +43,6 @@ class RetrievedVectorDocument:
     )
 
 
-@dataclass(slots=True)
-class LocalSource:
-    """
-    Точный источник из metadata локального документа.
-    """
-
-    title: str
-    url: str
-
 
 @dataclass(slots=True)
 class VectorContextResult:
@@ -85,22 +76,52 @@ class VectorContextResult:
 
         if not self.documents:
             return (
-                "В локальной векторной базе "
-                "релевантные документы не найдены."
-            )
+            "В локальной векторной базе "
+            "релевантные документы не найдены."
+        )
 
         parts = [
-            "Контекст из локальной векторной базы:"
+        "Контекст из локальной "
+        "векторной базы:"
         ]
 
         for index, document in enumerate(
             self.documents,
             start=1,
-        ):
-            block = [
-                f"[LOCAL-{index}]",
-                document.text.strip(),
+            ):
+            source_id = (
+                f"LOCAL-{index}"
+            )
+
+            title = _first_metadata_value(
+                document.metadata,
+                LOCAL_SOURCE_TITLE_KEYS,
+            )
+
+            url = _first_metadata_value(
+                document.metadata,
+                LOCAL_SOURCE_URL_KEYS,
+            )
+
+            block: list[str] = [
+                f"[{source_id}]",
             ]
+
+            if title:
+                block.append(
+                    "Название источника: "
+                    f"{title}"
+                )
+
+            if url:
+                block.append(
+                    f"URL: {url}"
+                )
+
+            block.append(
+                "Содержимое:\n"
+                f"{document.text.strip()}"
+            )
 
             metadata_lines = (
                 _format_metadata_for_context(
@@ -109,7 +130,9 @@ class VectorContextResult:
             )
 
             if metadata_lines:
-                block.extend(metadata_lines)
+                block.extend(
+                    metadata_lines
+                )
 
             if document.score is not None:
                 block.append(
@@ -121,51 +144,9 @@ class VectorContextResult:
                 "\n".join(block)
             )
 
-        return "\n\n---\n\n".join(parts)
-
-    def get_sources(self) -> list[LocalSource]:
-        """
-        Извлекает точные URL из metadata документов.
-        """
-
-        result: list[LocalSource] = []
-        seen_urls: set[str] = set()
-
-        for document in self.documents:
-            url = _first_metadata_value(
-                document.metadata,
-                LOCAL_SOURCE_URL_KEYS,
-            )
-
-            if not url:
-                continue
-
-            normalized_url = url.strip()
-
-            if not normalized_url:
-                continue
-
-            if normalized_url in seen_urls:
-                continue
-
-            title = _first_metadata_value(
-                document.metadata,
-                LOCAL_SOURCE_TITLE_KEYS,
-            )
-
-            if not title:
-                title = "Локальный источник"
-
-            seen_urls.add(normalized_url)
-
-            result.append(
-                LocalSource(
-                    title=title,
-                    url=normalized_url,
-                )
-            )
-
-        return result
+        return "\n\n---\n\n".join(
+        parts
+        )
 
 
 def _first_metadata_value(
@@ -349,38 +330,3 @@ def retrieve_vector_context(
         query=clean_query,
         documents=documents,
     )
-
-
-def append_exact_local_sources(
-    answer: str,
-    result: VectorContextResult,
-) -> str:
-    """
-    Программно добавляет точные URL локальных
-    документов после генерации NVIDIA.
-
-    Благодаря этому модель не может изменить символы
-    внутри ссылки.
-    """
-
-    sources = result.get_sources()
-
-    if not sources:
-        return answer.strip()
-
-    lines = [
-        answer.strip(),
-        "",
-        "### Источники локальной базы",
-    ]
-
-    for index, source in enumerate(
-        sources,
-        start=1,
-    ):
-        lines.append(
-            f"{index}. {source.title}\n"
-            f"   {source.url}"
-        )
-
-    return "\n".join(lines)

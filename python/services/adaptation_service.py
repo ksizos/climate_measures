@@ -2,176 +2,114 @@ from __future__ import annotations
 
 import logging
 
-from llama_index.core.llms import (
-    ChatMessage,
-)
-
 from core.config import (
     ADAPTATION_TABLE,
-    LLM_ADAPTATION_MODEL,
 )
 
-from infrastructure.llm.providers.provider_registry import (
-    get_adaptation_service_llm
+from infrastructure.llm.local_yandex import (
+    chat_text,
 )
 
-from infrastructure.vector_store.pgvector import (
-    load_vector_index,
-)
 from prompts.adaptation import (
     RAG_SYSTEM_PROMPT,
 )
 
-logger = logging.getLogger(__name__)
-
-META_COLUMNS_DISPLAY = {
-    "meta_Наименование района": (
-        "Наименование района"
-    ),
-    "meta_Агроклиматические условия района": (
-        "Агроклиматические условия района"
-    ),
-    "meta_Ответственная организация": (
-        "Ответственная организация"
-    ),
-    "meta_Источник": "Источник",
-}
-
-
-adaptation_llm = get_adaptation_service_llm(
-    model=LLM_ADAPTATION_MODEL,
-    temperature=0.2,
-    max_tokens=2800,
-    function_calling=False,
+from services.vector_context_service import (
+    retrieve_vector_context,
 )
 
 
-def retrieve_rag_context(
-    user_question: str,
-) -> str:
-    try:
-        index = load_vector_index(
-            table_name=ADAPTATION_TABLE,
-        )
-
-        retriever = index.as_retriever(
-            similarity_top_k=4,
-        )
-
-        nodes = retriever.retrieve(
-            user_question
-        )
-
-        logger.info(
-            "Adaptation RAG: query=%s, nodes=%s",
-            user_question[:300],
-            len(nodes),
-        )
-
-        if not nodes:
-            return (
-                "Не найдено релевантных документов."
-            )
-
-        context_parts: list[str] = []
-
-        for index_number, node in enumerate(
-            nodes,
-            start=1,
-        ):
-            block = [
-                f"[LOCAL-{index_number}]",
-                node.get_content().strip(),
-            ]
-
-            for (
-                metadata_key,
-                display_name,
-            ) in META_COLUMNS_DISPLAY.items():
-                value = node.metadata.get(
-                    metadata_key
-                )
-
-                if value:
-                    block.append(
-                        f"{display_name}: {value}"
-                    )
-
-            score = getattr(
-                node,
-                "score",
-                None,
-            )
-
-            if score is not None:
-                block.append(
-                    "Релевантность: "
-                    f"{float(score):.4f}"
-                )
-
-            context_parts.append(
-                "\n".join(block)
-            )
-
-        return "\n\n---\n\n".join(
-            context_parts
-        )
-
-    except Exception as error:
-        logger.exception(
-            "Ошибка при извлечении "
-            "адаптационного RAG-контекста"
-        )
-
-        return (
-            "Ошибка при извлечении контекста: "
-            f"{error}"
-        )
+logger = logging.getLogger(__name__)
 
 
 def generate_adaptation_response(
     user_question: str,
     conversation_history: str | None = None,
 ) -> str:
-    context = retrieve_rag_context(
-        user_question
+    """
+    Схема:
+
+    RAG
+     ↓
+    Local YandexGPT
+    """
+
+    logger.info(
+        "Adaptation service START: %s",
+        user_question,
     )
 
-    history_instruction = ""
+    local_result = retrieve_vector_context(
+        user_question,
+        table_name=ADAPTATION_TABLE,
+        top_k=4,
+    )
+
+    history_block = ""
 
     if conversation_history:
-        history_instruction = (
-            "\n\nИстория диалога:\n"
-            f"{conversation_history}\n\n"
-            "Учитывай историю при формировании ответа."
-        )
+        history_block = f"""
+История диалога:
+{conversation_history}
+""".strip()
 
-    full_system_prompt = (
-        RAG_SYSTEM_PROMPT
-        + history_instruction
-        + "\n\nКонтекст из базы знаний:\n"
-        + context
+    user_prompt = f"""
+{history_block}
+
+Вопрос пользователя:
+{user_question}
+
+=== ЛОКАЛЬНАЯ БАЗА АДАПТАЦИОННЫХ МЕРОПРИЯТИЙ ===
+
+{local_result.to_context()}
+
+Сформируй экспертный ответ на вопрос пользователя.
+
+Правила:
+
+1. Основывай рекомендации на переданном контексте.
+
+2. Не придумывай мероприятия,
+   которых нет в контексте,
+   как будто они взяты из базы.
+
+3. Учитывай территорию,
+   климатический риск,
+   отрасль и другие условия,
+   если они присутствуют в запросе.
+
+4. Объясняй, почему предложенное
+   мероприятие подходит пользователю.
+
+5. В конце добавь:
+
+### Источники
+
+6. Включай только источники,
+   сведения или мероприятия из которых
+   реально использованы в ответе.
+
+7. URL бери исключительно
+   из блоков [LOCAL-N].
+
+8. Копируй URL дословно.
+
+9. Если у использованного документа
+   URL отсутствует,
+   не придумывай его.
+""".strip()
+
+    answer = chat_text(
+        system_prompt=RAG_SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        temperature=0.2,
+        max_new_tokens=2800,
     )
 
-    messages = [
-        ChatMessage(
-            role="system",
-            content=full_system_prompt,
-        ),
-        ChatMessage(
-            role="user",
-            content=(
-                "Пользовательский запрос: "
-                f"{user_question}"
-            ),
-        ),
-    ]
-
-    response = adaptation_llm.chat(
-        messages
+    logger.info(
+        "Adaptation service FINISHED: "
+        "local_documents=%s",
+        len(local_result.documents),
     )
 
-    return (
-        response.message.content
-        or ""
-    )
+    return answer

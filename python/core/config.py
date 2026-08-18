@@ -17,74 +17,45 @@ FLOOD_OBJECTS_TABLE = os.getenv("FLOOD_OBJECTS_TABLE")
 DATA_PATH= Path(os.getenv("DATA_PATH","./data",))
 STATISTICS_PATH = Path(os.getenv("STATISTICS_PATH","./data/Statistics_MO",))
 
-LLM_ORCHESTRATOR_PROVIDER = os.getenv("LLM_ORCHESTRATOR_PROVIDER","nvidia",).strip().lower()
-LLM_SPECIALIZED_AGENT_PROVIDER = os.getenv("LLM_SPECIALIZED_AGENT_PROVIDER","nvidia",).strip().lower()
-LLM_ADAPTATION_PROVIDER = os.getenv("LLM_ADAPTATION_PROVIDER","nvidia",).strip().lower()
-LLM_DIALOG_PROVIDER = os.getenv("LLM_DIALOG_PROVIDER","nvidia",).strip().lower()
-LLM_NPA_PROVIDER = os.getenv("LLM_NPA_PROVIDER","nvidia",).strip().lower()
-LLM_METHOD_DOCS_PROVIDER = os.getenv("LLM_METHOD_DOCS_PROVIDER","nvidia",).strip().lower()
-LLM_INTERNET_RESOURCES_PROVIDER = os.getenv("LLM_INTERNET_RESOURCES_PROVIDER","nvidia",).strip().lower()
-LLM_STATISTICS_SQL_PROVIDER = os.getenv("LLM_STATISTICS_SQL_PROVIDER","nvidia",).strip().lower()
-LLM_STATISTICS_ANSWER_PROVIDER = os.getenv("LLM_STATISTICS_ANSWER_PROVIDER","nvidia",).strip().lower()
-LLM_STRUCTURED_DATA_PROVIDER = os.getenv("LLM_STRUCTURED_DATA_PROVIDER","nvidia",).strip().lower()
 
-LLM_ORCHESTRATOR_MODEL = os.getenv("LLM_ORCHESTRATOR_MODEL")
-LLM_SPECIALIZED_AGENT_MODEL = os.getenv("LLM_SPECIALIZED_AGENT_MODEL")
-LLM_DIALOG_MODEL = os.getenv("LLM_DIALOG_MODEL")
-LLM_ADAPTATION_MODEL = os.getenv("LLM_ADAPTATION_MODEL")
-LLM_NPA_MODEL = os.getenv("LLM_NPA_MODEL")
-LLM_METHOD_DOCS_MODEL = os.getenv("LLM_METHOD_DOCS_MODEL")
-LLM_INTERNET_RESOURCES_MODEL = os.getenv("LLM_INTERNET_RESOURCES_MODEL")
-LLM_STATISTICS_SQL_MODEL = os.getenv("LLM_STATISTICS_SQL_MODEL")
-LLM_STATISTICS_ANSWER_MODEL = os.getenv("LLM_STATISTICS_ANSWER_MODEL")
-LLM_STRUCTURED_DATA_MODEL = os.getenv("LLM_STRUCTURED_DATA_MODEL")
-
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL")
-OPENROUTER_REQUEST_TIMEOUT = float(os.getenv("OPENROUTER_REQUEST_TIMEOUT","180",))
-OPENROUTER_MAX_RETRIES = int(os.getenv("OPENROUTER_MAX_RETRIES","1",))
-
-ORCHESTRATOR_TEMPERATURE = float(os.getenv("ORCHESTRATOR_TEMPERATURE","0.1"))
-ORCHESTRATOR_MAX_TOKENS = int(os.getenv("ORCHESTRATOR_MAX_TOKENS","1500"))
-AGENT_TEMPERATURE = float(os.getenv("AGENT_TEMPERATURE","0.1"))
-AGENT_MAX_TOKENS = int(os.getenv("AGENT_MAX_TOKENS","1500"))
-
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL")
-NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL")
-NVIDIA_REQUEST_TIMEOUT = float( os.getenv("NVIDIA_REQUEST_TIMEOUT", "240"))
-NVIDIA_MAX_RETRIES = int(os.getenv("NVIDIA_MAX_RETRIES", "0"))
-
-YANDEX_CLOUD_API_KEY = os.getenv("YANDEX_CLOUD_API_KEY")
-YANDEX_CLOUD_BASE_URL = os.getenv(
-    "YANDEX_CLOUD_BASE_URL",
-    "https://rest-assistant.api.cloud.yandex.net/v1",
+LOCAL_LLM_MODEL_NAME = os.getenv(
+    "LOCAL_LLM_MODEL_NAME",
+    "yandex/YandexGPT-5-Lite-8B-instruct",
 )
-YANDEX_CLOUD_FOLDER = os.getenv("YANDEX_CLOUD_FOLDER")
-YANDEX_CLOUD_MODEL = os.getenv(
-    "YANDEX_CLOUD_MODEL",
-    "yandexgpt",
-)
-YANDEX_WEB_SEARCH_ENABLED = (
+
+LOCAL_LLM_CONTEXT_WINDOW = int(
     os.getenv(
-        "YANDEX_WEB_SEARCH_ENABLED",
-        "true",
-    ).strip().lower()
-    in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-)
-YANDEX_WEB_SEARCH_TIMEOUT = float(
-    os.getenv(
-        "YANDEX_WEB_SEARCH_TIMEOUT",
-        "180",
+        "LOCAL_LLM_CONTEXT_WINDOW",
+        "32768",
     )
 )
-YANDEX_WEB_SEARCH_MAX_RESULTS = int(os.getenv("YANDEX_WEB_SEARCH_MAX_RESULTS","8",))
-YANDEX_WEB_SEARCH_MAX_OUTPUT_TOKENS = int(os.getenv("YANDEX_WEB_SEARCH_MAX_OUTPUT_TOKENS","2500",))
+
+LOCAL_LLM_DEVICE_MAP = os.getenv(
+    "LOCAL_LLM_DEVICE_MAP",
+    "auto",
+)
+
+LOCAL_LLM_TOP_P = float(
+    os.getenv(
+        "LOCAL_LLM_TOP_P",
+        "0.9",
+    )
+)
+
+ORCHESTRATOR_MAX_TOKENS = int(
+    os.getenv(
+        "ORCHESTRATOR_MAX_TOKENS",
+        "30000",
+    )
+)
+
+AGGREGATOR_MAX_TOKENS = int(
+    os.getenv(
+        "AGGREGATOR_MAX_TOKENS",
+        "30000",
+    )
+)
+
 
 BRIGHT_DATA_API_URL = os.getenv("BRIGHT_DATA_API_URL")
 BRIGHT_DATA_TOKEN = os.getenv("BRIGHT_DATA_TOKEN")

@@ -1,24 +1,25 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from core.config import (
-    LLM_METHOD_DOCS_MODEL,
     METHOD_DOCS_TABLE,
 )
-from infrastructure.llm.providers.provider_registry import (
-    call_method_docs_service_text
+
+from infrastructure.llm.local_yandex import (
+    achat_text,
 )
+
 from prompts.method_docs import (
     METHOD_DOCS_SYSTEM_PROMPT,
 )
+
 from services.vector_context_service import (
-    append_exact_local_sources,
     retrieve_vector_context,
 )
+
 from services.web_search_service import (
-    #append_exact_web_sources,
-    #build_web_facts_context,
     perform_web_search,
 )
 
@@ -26,26 +27,16 @@ from services.web_search_service import (
 logger = logging.getLogger(__name__)
 
 
-METHOD_DOCS_ALLOWED_DOMAINS = [
-    "economy.gov.ru",
-    "government.ru",
-    "minprirody.gov.ru",
-    "meteorf.gov.ru",
-    "rosgidromet.gov.ru",
-    "ipcc.ch",
-    "unfccc.int",
-    "unep.org",
-    "undp.org",
-]
-
-
-def generate_method_docs_response(
+async def generate_method_docs_response(
     user_question: str,
     conversation_history: str | None = None,
 ) -> str:
     """
-    Использует METHOD_DOCS_TABLE, Web Search
-    и отдельную NVIDIA-модель.
+    Параллельно:
+    - METHOD_DOCS_TABLE;
+    - Google AI Overview.
+
+    После этого один вызов YandexGPT.
     """
 
     logger.info(
@@ -53,101 +44,117 @@ def generate_method_docs_response(
         user_question,
     )
 
-    local_result = retrieve_vector_context(
+    web_query = (
+        "официальные методические рекомендации "
+        "руководства доклады аналитические документы "
+        "климатические риски адаптация "
+        f"{user_question}"
+    )
+
+    local_task = asyncio.to_thread(
+        retrieve_vector_context,
         user_question,
         table_name=METHOD_DOCS_TABLE,
         top_k=4,
     )
 
-    '''web_result = perform_web_search(
-        query=f"""
-Найди официальные методические рекомендации,
-руководства, доклады и аналитические документы
-по следующему вопросу:
+    web_task = asyncio.to_thread(
+        perform_web_search,
+        web_query,
+    )
 
-{user_question}
+    (
+        local_result,
+        web_result,
+    ) = await asyncio.gather(
+        local_task,
+        web_task,
+    )
 
-Для каждого документа укажи:
-- название;
-- организацию или автора;
-- дату;
-- назначение.
-""".strip(),
-        instructions=(
-            "Обязательно используй web_search. "
-            "Ищи официальные государственные, "
-            "научные и международные документы. "
-            "Не утверждай, что найденный документ "
-            "является единственным существующим."
-        ),
-        allowed_domains=(
-            METHOD_DOCS_ALLOWED_DOMAINS
-        ),
-        max_output_tokens=2400,
-    )'''
-    web_result = perform_web_search(
-        query=user_question)
     history_block = ""
 
     if conversation_history:
-        history_block = (
-            "История диалога:\n"
-            f"{conversation_history}\n\n"
-        )
-# ПОМЕНЯТЬ ПО ПОВОДУ ИСТОЧНИКОВ!
-    final_user_prompt = f"""
+        history_block = f"""
+История диалога:
+{conversation_history}
+""".strip()
+
+    user_prompt = f"""
 {history_block}
+
 Вопрос пользователя:
 {user_question}
 
+=== ЛОКАЛЬНАЯ БАЗА МЕТОДИЧЕСКИХ ДОКУМЕНТОВ ===
+
 {local_result.to_context()}
 
-{build_web_facts_context(web_result)}
+=== GOOGLE AI OVERVIEW ===
 
-Подготовь единый ответ.
+{web_result.to_context()}
+
+Подготовь единый экспертный ответ.
 
 Правила:
-1. Отделяй методические документы от общих публикаций.
-2. Не утверждай, что один документ является
-   единственным существующим.
-3. Используй формулировку:
-   «Основным выявленным документом является...»
-4. Если другие документы не найдены, пиши:
-   «В предоставленном контексте другие документы
-   не обнаружены».
-5. Не пиши URL.
-6. Локальные документы обозначай [LOCAL-N].
-7. Веб-источники обозначай [WEB-N].
-8. Объясняй применимость каждого документа.
-9. Не добавляй собственный раздел со ссылками.
+
+1. Отделяй официальные методические документы
+   от обычных информационных публикаций.
+
+2. Не придумывай документы,
+   организации, авторов, даты или URL.
+
+3. Не утверждай, что найденный документ
+   является единственным существующим.
+
+4. Если в контексте найден только один
+   релевантный документ, можно написать:
+   "Основным выявленным документом является..."
+
+5. Если другие документы отсутствуют, пиши:
+   "В предоставленном контексте другие
+   релевантные документы не обнаружены".
+
+6. Объясняй назначение и применимость
+   документов относительно вопроса пользователя.
+
+7. Локальная база является приоритетным
+   источником для имеющихся в ней документов.
+
+8. Google AI Overview используй
+   как дополнительный актуальный контекст.
+
+9. В конце обязательно добавь:
+
+### Источники
+
+10. Включай только источники,
+    реально использованные в ответе.
+
+11. Разрешены только URL,
+    присутствующие в [LOCAL-N]
+    или [WEB-N].
+
+12. Копируй URL дословно.
+
+13. Не добавляй найденный источник,
+    если информация из него
+    не использовалась в ответе.
 """.strip()
 
-    answer = call_method_docs_service_text(
-        user_prompt=final_user_prompt,
-        system_prompt=(
-            METHOD_DOCS_SYSTEM_PROMPT
-        ),
-        model=LLM_METHOD_DOCS_MODEL,
+    answer = await achat_text(
+        system_prompt=METHOD_DOCS_SYSTEM_PROMPT,
+        user_prompt=user_prompt,
         temperature=0.2,
-        max_output_tokens=2800,
-    )
-
-    answer = append_exact_local_sources(
-        answer,
-        local_result,
-    )
-
-    answer = append_exact_web_sources(
-        answer,
-        web_result,
+        max_new_tokens=2800,
     )
 
     logger.info(
         "Method docs service FINISHED: "
-        "local_documents=%s, web_used=%s, "
+        "local_documents=%s, "
+        "web_overview=%s, "
         "web_sources=%s",
         len(local_result.documents),
-        web_result.used_web_search,
+        bool(web_result.overview),
         len(web_result.sources),
     )
 

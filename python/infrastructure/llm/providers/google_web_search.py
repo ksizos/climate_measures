@@ -1,20 +1,31 @@
+from __future__ import annotations
+
 import json
+
 import requests
 from urllib.parse import urlencode
 
 from core.config import (
     BRIGHT_DATA_API_URL,
-    BRIGHT_DATA_TOKEN
+    BRIGHT_DATA_TOKEN,
 )
 
 
-def extract_ai_overview_text(node):
-    result = []
+def extract_ai_overview_text(
+    node,
+) -> list[str]:
+    """
+    Рекурсивно извлекает текстовые части
+    Google AI Overview.
+    """
+
+    result: list[str] = []
 
     if isinstance(node, list):
-
         for item in node:
-            result.extend(extract_ai_overview_text(item))
+            result.extend(
+                extract_ai_overview_text(item)
+            )
 
         return result
 
@@ -24,113 +35,152 @@ def extract_ai_overview_text(node):
     node_type = node.get("type")
 
     if node_type == "paragraph":
-
         snippet = node.get("snippet")
 
         if snippet:
-            result.append(snippet.strip())
+            result.append(
+                str(snippet).strip()
+            )
 
         return result
 
     if node_type == "list":
-
         title = node.get("title")
 
         if title:
-            result.append(title.strip())
+            result.append(
+                str(title).strip()
+            )
 
-        children = node.get("list", [])
+        children = node.get(
+            "list",
+            [],
+        )
 
         result.extend(
-            extract_ai_overview_text(children)
+            extract_ai_overview_text(
+                children
+            )
         )
 
         return result
 
     if "list" in node:
         result.extend(
-            extract_ai_overview_text(node["list"])
+            extract_ai_overview_text(
+                node["list"]
+            )
         )
 
     if "snippet" in node:
         snippet = node.get("snippet")
 
         if snippet:
-            result.append(snippet.strip())
+            result.append(
+                str(snippet).strip()
+            )
 
     return result
 
 
-def get_ai_overview(serp):
-    ai_overview = serp.get("ai_overview")
+def get_ai_overview(
+    serp: dict,
+) -> dict | None:
+    """
+    Возвращает:
+
+    {
+        "text": "...",
+        "sources": [
+            {
+                "title": "...",
+                "url": "..."
+            }
+        ]
+    }
+
+    sources — только references,
+    указанные самим Google AI Overview.
+    """
+
+    ai_overview = serp.get(
+        "ai_overview"
+    )
 
     if not ai_overview:
         return None
 
     text_parts = extract_ai_overview_text(
-        ai_overview.get("texts", [])
+        ai_overview.get(
+            "texts",
+            [],
+        )
     )
-    text_parts = [
-        text.strip()
-        for text in text_parts
-        if text and text.strip()
-    ]
 
-    unique_text_parts = []
+    unique_text_parts: list[str] = []
 
     for text in text_parts:
+        clean_text = text.strip()
 
-        if text not in unique_text_parts:
-            unique_text_parts.append(text)
+        if not clean_text:
+            continue
 
-    ai_text = "\n\n".join(unique_text_parts)
+        if clean_text in unique_text_parts:
+            continue
 
-    sources = []
+        unique_text_parts.append(
+            clean_text
+        )
 
-    for reference in ai_overview.get("references", []):
+    ai_text = "\n\n".join(
+        unique_text_parts
+    )
 
-        url = reference.get("href")
-        title = reference.get("title")
+    sources: list[dict] = []
+    seen_urls: set[str] = set()
+
+    for reference in ai_overview.get(
+        "references",
+        [],
+    ):
+        url = (
+            reference.get("href")
+            or ""
+        ).strip()
 
         if not url:
             continue
 
-        source = {
-            "title": title or "",
-            "url": url
-        }
+        if url in seen_urls:
+            continue
 
-        sources.append(source)
+        seen_urls.add(url)
+
+        title = (
+            reference.get("title")
+            or ""
+        ).strip()
+
+        sources.append(
+            {
+                "title": title,
+                "url": url,
+            }
+        )
 
     return {
         "text": ai_text,
-        "sources": sources
+        "sources": sources,
     }
 
 
-"""
-def get_organic_results(serp):
-    results = []
+def parse_bright_data_response(
+    response: requests.Response,
+) -> dict:
+    """
+    Разбирает Bright Data response.
+    """
 
-    for item in serp.get("organic", []):
-
-        result = {
-            "link": item.get("link", ""),
-            "source": item.get("source", ""),
-            "title": item.get("title", ""),
-            "description": item.get("description", "")
-        }
-
-        if not any(result.values()):
-            continue
-
-        results.append(result)
-
-    return results
-"""
-
-
-def parse_bright_data_response(response):
     response.raise_for_status()
 
     outer_response = response.json()
@@ -139,73 +189,91 @@ def parse_bright_data_response(response):
 
     if body is None:
         raise ValueError(
-            "В ответе нет 'body'"
+            "В ответе Bright Data нет 'body'."
         )
 
     if isinstance(body, str):
-
         try:
             serp = json.loads(body)
 
         except json.JSONDecodeError as exc:
             raise ValueError(
-                "'body' не JSON"
+                "'body' Bright Data не является JSON."
             ) from exc
 
     elif isinstance(body, dict):
-
         serp = body
 
     else:
-
         raise ValueError(
-            f"Неверный тип 'body': "
+            "Неверный тип Bright Data body: "
             f"{type(body).__name__}"
         )
 
-    result = {
-        "query": serp.get("general", {}).get("query", ""),
-        "ai_overview": get_ai_overview(serp)
-        # "organic_results": get_organic_results(serp) - если нужна выдача
+    return {
+        "query": (
+            serp
+            .get("general", {})
+            .get("query", "")
+        ),
+
+        # Только AI Overview.
+        "ai_overview": get_ai_overview(
+            serp
+        ),
     }
 
-    return result
 
+def search_google(
+    query: str,
+) -> dict:
+    """
+    Google Search через Bright Data.
 
-# ключевая функция
-def search_google(query):
+    Запрашиваем AI Overview.
+    Organic выдача приложением не используется.
+    """
+
     params = {
         "q": query,
         "hl": "ru",
         "gl": "RU",
-        "uule": "w CAIQICIUVHl1bWVuIE9ibGFzdCxSdXNzaWE",
-        "brd_ai_overview": "2"
+
+        # Тюмень / Тюменская область.
+        "uule": (
+            "w CAIQICIUVHl1bWVuIE9ibGFzdCxSdXNzaWE"
+        ),
+
+        # Запрашиваем AI Overview.
+        "brd_ai_overview": "2",
     }
 
     google_url = (
-            "https://www.google.com/search?"
-            + urlencode(params)
+        "https://www.google.com/search?"
+        + urlencode(params)
     )
 
     headers = {
-        "Authorization": f"Bearer {BRIGHT_DATA_TOKEN}",
-        "Content-Type": "application/json"
+        "Authorization": (
+            f"Bearer {BRIGHT_DATA_TOKEN}"
+        ),
+        "Content-Type": "application/json",
     }
 
     data = {
         "zone": "serp_api1",
         "url": google_url,
         "format": "json",
-        "data_format": "parsed"
+        "data_format": "parsed",
     }
 
     response = requests.post(
         BRIGHT_DATA_API_URL,
         json=data,
         headers=headers,
-        timeout=60
+        timeout=60,
     )
 
-    result = parse_bright_data_response(response)
-
-    return result
+    return parse_bright_data_response(
+        response
+    )

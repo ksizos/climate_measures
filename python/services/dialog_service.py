@@ -1,29 +1,37 @@
-from infrastructure.llm.providers.provider_registry import (
-    call_dialog_service_text
+from __future__ import annotations
+
+from infrastructure.llm.local_yandex import (
+    chat_text,
 )
-from prompts.dialog import DIALOG_SYSTEM_PROMPT
+
+from prompts.dialog import (
+    DIALOG_SYSTEM_PROMPT,
+)
+
 
 def generate_dialog_response(
     user_question: str,
     conversation_history: str | None = None,
 ) -> str:
-    history_instruction = ""
+
+    history_block = ""
 
     if conversation_history:
-        history_instruction = (
-            "\n\nИстория диалога:\n"
-            f"{conversation_history}\n\n"
-            "Учитывай предыдущие сообщения."
-        )
+        history_block = f"""
+История диалога:
+{conversation_history}
+""".strip()
 
-    full_prompt = (
-        f"{history_instruction}\n\n"
-        f"Запрос пользователя: {user_question}"
-    ).strip()
+    user_prompt = f"""
+{history_block}
 
-    return call_dialog_service_text(
-        user_prompt=full_prompt,
+Запрос пользователя:
+{user_question}
+""".strip()
+
+    return chat_text(
         system_prompt=DIALOG_SYSTEM_PROMPT,
-        temperature=0.5,
-        max_output_tokens=2500,
+        user_prompt=user_prompt,
+        temperature=0.4,
+        max_new_tokens=2000,
     )

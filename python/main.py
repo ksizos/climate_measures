@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import asyncio
 import logging
 import os
 
@@ -18,7 +18,9 @@ from api.routes import (
 from core.config import APP_TITLE
 from core.logging_config import setup_logging
 
-
+from infrastructure.llm.local_yandex import (
+    preload_local_llm,
+)
 setup_logging()
 
 logger = logging.getLogger(__name__)
@@ -74,6 +76,18 @@ def create_app() -> FastAPI:
 
     @application.on_event("startup")
     async def startup_event() -> None:
+        logger.info(
+            "Загрузка локальной YandexGPT..."
+        )
+
+        await asyncio.to_thread(
+            preload_local_llm
+        )
+
+        logger.info(
+            "Локальная YandexGPT загружена."
+        )
+
         logger.info(
             "Приложение %s запущено",
             APP_TITLE,

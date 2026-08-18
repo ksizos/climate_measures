@@ -1,15 +1,7 @@
 import logging
 
 import pandas as pd
-from llama_index.core.llms import ChatMessage
 
-from core.config import (
-    LLM_STATISTICS_ANSWER_MODEL,
-    LLM_STATISTICS_SQL_MODEL,
-)
-from infrastructure.llm.providers.provider_registry import (
-    get_statistics_sql_llm, get_statistics_answer_llm
-)
 
 from infrastructure.database.sql_security import (
     extract_sql_from_llm_response,
@@ -20,6 +12,10 @@ from prompts.statistics import (
     STATISTICS_ANSWER_SYSTEM_PROMPT,
     STATISTICS_SCHEMA_DESCRIPTION,
     STATISTICS_SQL_SYSTEM_PROMPT,
+)
+
+from infrastructure.llm.local_yandex import (
+    chat_text,
 )
 
 from infrastructure.database.statistics_repository import (
@@ -38,19 +34,6 @@ import re
 
 logger = logging.getLogger(__name__)
 
-statistics_sql_llm = get_statistics_sql_llm(
-    model=LLM_STATISTICS_SQL_MODEL,
-    temperature=0.0,
-    max_tokens=700,
-    function_calling=False,
-)
-
-statistics_answer_llm = get_statistics_answer_llm(
-    model=LLM_STATISTICS_ANSWER_MODEL,
-    temperature=0.1,
-    max_tokens=1000,
-    function_calling=False,
-)
 
 def extract_requested_years(
     user_question: str,
@@ -238,20 +221,14 @@ def generate_statistics_sql(
         user_message,
     )
 
-    messages = [
-        ChatMessage(
-            role="system",
-            content=STATISTICS_SQL_SYSTEM_PROMPT,
+    raw_sql = chat_text(
+        system_prompt=(
+            STATISTICS_SQL_SYSTEM_PROMPT
         ),
-        ChatMessage(
-            role="user",
-            content=user_message,
-        ),
-    ]
-
-    response = statistics_sql_llm.chat(
-    messages)
-    raw_sql = response.message.content or ""
+        user_prompt=user_message,
+        temperature=0.0,
+        max_new_tokens=700,
+    )  
 
     logger.debug(
         "Ответ SQL-модели: %s",
@@ -276,29 +253,28 @@ def generate_statistics_answer(
         dataframe
     )
 
-    messages = [
-        ChatMessage(
-            role="system",
-            content=STATISTICS_ANSWER_SYSTEM_PROMPT,
-        ),
-        ChatMessage(
-            role="user",
-            content=(
-                "Описание структуры БД:\n"
-                f"{STATISTICS_SCHEMA_DESCRIPTION}\n\n"
-                "Запрос пользователя:\n"
-                f"{user_question}\n\n"
-                "SQL-запрос:\n"
-                f"{sql}\n\n"
-                "Результаты:\n"
-                f"{rows_text}"
-            ),
-        ),
-    ]
+    user_prompt = (
+        "Описание структуры БД:\n"
+        f"{STATISTICS_SCHEMA_DESCRIPTION}\n\n"
 
-    response = statistics_answer_llm.chat(
-    messages)
-    return response.message.content or ""
+        "Запрос пользователя:\n"
+        f"{user_question}\n\n"
+
+        "Выполненный SQL-запрос:\n"
+        f"{sql}\n\n"
+
+        "Полученные результаты:\n"
+        f"{rows_text}"
+    )
+
+    return chat_text(
+        system_prompt=(
+            STATISTICS_ANSWER_SYSTEM_PROMPT
+        ),
+        user_prompt=user_prompt,
+        temperature=0.1,
+        max_new_tokens=1200,
+    )
 
 
 def generate_statistics_response(

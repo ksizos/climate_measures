@@ -119,3 +119,6 @@ async def achat_text(
 
 def preload_local_llm() -> None:
     _load_model_bundle()
+
+def preload_llm() -> None:
+    preload_local_llm()

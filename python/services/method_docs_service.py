@@ -7,7 +7,7 @@ from core.config import (
     METHOD_DOCS_TABLE,
 )
 
-from infrastructure.llm.local_yandex import (
+from infrastructure.llm.provider import (
     achat_text,
 )
 

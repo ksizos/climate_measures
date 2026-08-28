@@ -5,7 +5,7 @@ import logging
 
 from core.config import NPA_TABLE
 
-from infrastructure.llm.local_yandex import (
+from infrastructure.llm.provider import (
     achat_text,
 )
 
@@ -46,9 +46,7 @@ async def generate_npa_response(
     )
 
     web_query = (
-        "действующие нормативные правовые акты "
-        "Россия климатические риски адаптация "
-        f"{user_question}"
+        f"{user_question} - предоставь ии-обзор по вопросу"
     )
 
     local_task = asyncio.to_thread(

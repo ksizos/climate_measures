@@ -149,3 +149,33 @@ TOP_LEVEL_HINTS = (
 )
 
 APP_TITLE = os.getenv("APP_TITLE")
+
+# LLM provider
+
+LLM_PROVIDER = os.getenv(
+    "LLM_PROVIDER",
+    "local",
+).strip().lower()
+
+
+# Yandex Cloud API
+
+YANDEX_CLOUD_FOLDER = os.getenv(
+    "YANDEX_CLOUD_FOLDER",
+    "",
+).strip()
+
+YANDEX_CLOUD_API_KEY = os.getenv(
+    "YANDEX_CLOUD_API_KEY",
+    "",
+).strip()
+
+YANDEX_CLOUD_MODEL = os.getenv(
+    "YANDEX_CLOUD_MODEL",
+    "yandexgpt-5-lite/latest",
+).strip()
+
+YANDEX_CLOUD_BASE_URL = os.getenv(
+    "YANDEX_CLOUD_BASE_URL",
+    "https://ai.api.cloud.yandex.net/v1",
+).strip()

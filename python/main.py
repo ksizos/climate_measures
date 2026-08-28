@@ -18,8 +18,8 @@ from api.routes import (
 from core.config import APP_TITLE
 from core.logging_config import setup_logging
 
-from infrastructure.llm.local_yandex import (
-    preload_local_llm,
+from infrastructure.llm.provider import (
+    preload_llm,
 )
 setup_logging()
 
@@ -81,7 +81,7 @@ def create_app() -> FastAPI:
         )
 
         await asyncio.to_thread(
-            preload_local_llm
+            preload_llm
         )
 
         logger.info(

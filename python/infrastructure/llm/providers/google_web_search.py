@@ -79,7 +79,7 @@ def extract_ai_overview_text(
             result.append(
                 str(snippet).strip()
             )
-
+    print(result)
     return result
 
 
@@ -238,7 +238,7 @@ def search_google(
         "q": query,
         "hl": "ru",
         "gl": "RU",
-
+        "brd_json": "1",
         # Тюмень / Тюменская область.
         "uule": (
             "w CAIQICIUVHl1bWVuIE9ibGFzdCxSdXNzaWE"
@@ -264,7 +264,6 @@ def search_google(
         "zone": "serp_api1",
         "url": google_url,
         "format": "json",
-        "data_format": "parsed",
     }
 
     response = requests.post(

@@ -6,7 +6,7 @@ from core.config import (
     ADAPTATION_TABLE,
 )
 
-from infrastructure.llm.local_yandex import (
+from infrastructure.llm.provider import (
     chat_text,
 )
 

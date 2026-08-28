@@ -244,6 +244,11 @@
 
 </aside>
 
+<div
+    id="sidebarBackdrop"
+    class="sidebar-backdrop"
+    aria-hidden="true">
+</div>
 
 {{-- ========================================================
      УДАЛЕНИЕ

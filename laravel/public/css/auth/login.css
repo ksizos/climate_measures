@@ -15,6 +15,8 @@
 }
 
 .auth_panel {
+    width: 100%;
+    max-width: 460px;
     border: none;
     border-radius: 10px;
     width: auto;
@@ -24,7 +26,7 @@
 }
 
 .logo {
-    width: 320px;
+    width: min(320px, 100%);
     height: auto;
 }
 
@@ -56,21 +58,21 @@
     width: 100%;
 }
 
-.form-control:focus {
-    border-color: var(--border-color-green);
-    box-shadow: 0 0 0 3px rgba(47, 105, 75, 0.12);
-    outline: none;
-}
-
 .form-control {
     border: 2px solid var(--border-color);
     border-radius: 10px;
     width: 100%;
 }
 
+.form-control:focus {
+    border-color: var(--border-color-green);
+    box-shadow: 0 0 0 3px rgba(47, 105, 75, 0.12);
+    outline: none;
+}
+
 .form-control::placeholder {
     font-size: 14px;
-    color: var(--color-text=muted);
+    color: var(--color-text-muted);
     text-align: left;
     white-space: nowrap;
 }
@@ -97,4 +99,83 @@
     background-color: white;
     border-radius: 10px;
     font-weight: 700;
+}
+
+@media (max-width: 768px) {
+    .auth_panel {
+        max-width: 420px;
+    }
+
+    .logo {
+        width: min(280px, 100%);
+    }
+
+    .auth_header {
+        font-size: 19px;
+    }
+}
+
+@media (max-width: 480px) {
+    .auth_block {
+        padding: 0 15px;
+    }
+
+    .auth_panel {
+        max-width: 100%;
+        padding: 20px !important;
+        border-radius: 8px;
+    }
+
+    .logo {
+        width: min(240px, 90%);
+    }
+
+    .auth_header {
+        font-size: 18px;
+    }
+
+    .auth_text_muted {
+        font-size: 13px;
+        max-width: 90%;
+        white-space: wrap !important;
+    }
+
+    .form-label,
+    .form-check-label {
+        font-size: 14px;
+    }
+
+    .form-control {
+        font-size: 16px;
+    }
+
+    .form-control::placeholder {
+        font-size: 13px;
+    }
+
+    .sumbit_button {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 360px) {
+    .auth_block {
+        padding: 12px 10px;
+    }
+
+    .auth_panel {
+        padding: 16px !important;
+    }
+
+    .logo {
+        width: min(210px, 90%);
+    }
+
+    .auth_header {
+        font-size: 17px;
+    }
+
+    .auth_text_muted {
+        font-size: 12px;
+    }
 }

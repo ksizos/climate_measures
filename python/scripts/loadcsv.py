@@ -35,24 +35,6 @@ def load_csv_to_postgres(csv_path: str, table_name: str = "climate_cases"):
         conn = psycopg2.connect(**DB_CONFIG)
         cursor = conn.cursor()
 
-        # Создание таблицы если не существует
-        create_table_query = f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            id SERIAL PRIMARY KEY,
-            problem TEXT NOT NULL,
-            measure_name TEXT NOT NULL,
-            mitigation_effect TEXT,
-            adaptation_effect TEXT,
-            district_name TEXT,
-            climate_conditions TEXT,
-            responsible_org TEXT,
-            source_url TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        """
-        cursor.execute(create_table_query)
-
         # Подготовка данных для вставки
         data_tuples = []
         for _, row in df.iterrows():
@@ -90,7 +72,6 @@ def load_csv_to_postgres(csv_path: str, table_name: str = "climate_cases"):
 
 
 if __name__ == "__main__":
-    # Пример использования
     csv_path = "data/Адапт меро.xlsx"
     if os.path.exists(csv_path):
         load_csv_to_postgres(csv_path)

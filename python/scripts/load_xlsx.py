@@ -8,6 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Iterable
 
+from datetime import date
+
+from services.statistics_periods import (
+    period_dates,
+)
+
 import openpyxl
 import psycopg2
 
@@ -126,7 +132,7 @@ class DB:
         return obj_id
 
     def get_or_create_territory(self, territory_name: str, territory_type_name: str = "муниципальный район") -> int:
-        tt_id = self.get_or_create_simple("territory_type", territory_type_name, "territory_type_id")
+        tt_id = self.get_or_create_simple("territory_type", territory_type_name, "id")
         key = ("territory", territory_name)
         if key in self.cache:
             return self.cache[key]
@@ -137,7 +143,7 @@ class DB:
         with self.conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT territory_id
+                SELECT id
                 FROM territory
                 WHERE name = %s AND territory_type_id = %s AND parent_territory_id IS NULL
                 """,
@@ -151,7 +157,7 @@ class DB:
                     """
                     INSERT INTO territory (parent_territory_id, territory_type_id, name)
                     VALUES (NULL, %s, %s)
-                    RETURNING territory_id
+                    RETURNING id
                     """,
                     (tt_id, territory_name),
                 )
@@ -160,7 +166,7 @@ class DB:
         return territory_id
 
     def get_or_create_section(self, industry_name: str, section_name: str) -> int:
-        industry_id = self.get_or_create_simple("industry", industry_name, "industry_id")
+        industry_id = self.get_or_create_simple("industry", industry_name, "id")
         key = ("section", section_name)
         if key in self.cache:
             return self.cache[key]
@@ -169,13 +175,13 @@ class DB:
             self.cache[key] = fake_id
             return fake_id
         with self.conn.cursor() as cur:
-            cur.execute("SELECT section_id FROM section WHERE name = %s", (section_name,))
+            cur.execute("SELECT id FROM section WHERE name = %s", (section_name,))
             row = cur.fetchone()
             if row:
                 section_id = row[0]
             else:
                 cur.execute(
-                    "INSERT INTO section (industry_id, name) VALUES (%s, %s) RETURNING section_id",
+                    "INSERT INTO section (industry_id, name) VALUES (%s, %s) RETURNING id",
                     (industry_id, section_name),
                 )
                 section_id = cur.fetchone()[0]
@@ -192,7 +198,7 @@ class DB:
             return fake_id
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT indicator_id FROM indicator WHERE section_id = %s AND name = %s",
+                "SELECT id FROM indicator WHERE section_id = %s AND name = %s",
                 (section_id, indicator_name),
             )
             row = cur.fetchone()
@@ -203,7 +209,7 @@ class DB:
                     """
                     INSERT INTO indicator (section_id, unit_id, name)
                     VALUES (%s, %s, %s)
-                    RETURNING indicator_id
+                    RETURNING id
                     """,
                     (section_id, unit_id, indicator_name),
                 )
@@ -211,30 +217,110 @@ class DB:
         self.cache[key] = indicator_id
         return indicator_id
 
-    def get_or_create_period(self, period_type_name: str, period_name: str) -> int:
-        period_type_id = self.get_or_create_simple("period_type", period_type_name, "period_type_id")
-        key = ("period", f"{period_type_id}::{period_name}")
+    def get_or_create_period(
+        self,
+        period_type_name: str,
+        period_name: str,
+        start_date: date,
+        end_date: date,
+        ) -> int:
+
+        period_type_id = (
+            self.get_or_create_simple(
+                "period_type",
+                period_type_name,
+                "id",
+            )
+        )
+
+        key = (
+            "period",
+            f"{period_type_id}::{period_name}",
+        )
+
         if key in self.cache:
             return self.cache[key]
+
         if self.dry_run:
-            fake_id = len(self.cache) + 1
+            fake_id = len(
+                self.cache
+            ) + 1
+
             self.cache[key] = fake_id
+
             return fake_id
+
         with self.conn.cursor() as cur:
+
             cur.execute(
-                "SELECT period_id FROM period WHERE period_type_id = %s AND name = %s",
-                (period_type_id, period_name),
+                """
+                SELECT
+                    id,
+                    start_date,
+                    end_date
+                FROM period
+                WHERE period_type_id = %s
+                AND name = %s
+                """,
+                (
+                    period_type_id,
+                    period_name,
+                ),
             )
+
             row = cur.fetchone()
+
             if row:
                 period_id = row[0]
+
+                current_start = row[1]
+                current_end = row[2]
+
+                if (
+                    current_start != start_date
+                    or current_end != end_date
+                ):
+                    cur.execute(
+                        """
+                        UPDATE period
+                        SET
+                            start_date = %s,
+                            end_date = %s
+                        WHERE period_id = %s
+                        """,
+                        (
+                            start_date,
+                            end_date,
+                            period_id,
+                        ),
+                    )
+
             else:
                 cur.execute(
-                    "INSERT INTO period (period_type_id, name, start_date, end_date) VALUES (%s, %s, NULL, NULL) RETURNING period_id",
-                    (period_type_id, period_name),
+                    """
+                    INSERT INTO period (
+                        period_type_id,
+                        name,
+                        start_date,
+                        end_date
+                    )
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING period_id
+                    """,
+                    (
+                        period_type_id,
+                        period_name,
+                        start_date,
+                        end_date,
+                    ),
                 )
-                period_id = cur.fetchone()[0]
+
+                period_id = (
+                    cur.fetchone()[0]
+                )
+
         self.cache[key] = period_id
+
         return period_id
 
     def upsert_statistic(self, territory_id: int, indicator_id: int, period_id: int, value: float):
@@ -372,14 +458,61 @@ def load_records(db: DB, records: list[LeafRecord], territory_name: str):
     territory_id = db.get_or_create_territory(territory_name)
 
     for rec in records:
-        unit_id = db.get_or_create_simple("unit", rec.unit_name, "unit_id")
+        unit_id = db.get_or_create_simple("unit", rec.unit_name, "id")
         section_id = db.get_or_create_section(rec.industry_name, rec.section_name)
         indicator_id = db.get_or_create_indicator(section_id, unit_id, rec.indicator_name)
-        period_type_name = infer_period_type(rec.period_label)
-        period_name = normalize_period_name(rec.period_label, rec.year)
-        period_id = db.get_or_create_period(period_type_name, period_name)
+        period_type_name = infer_period_type(
+            rec.period_label
+        )
+        period_name = normalize_period_name(
+            rec.period_label,
+            rec.year,
+        )
+        start_date, end_date = period_dates(
+            rec.period_label,
+            rec.year,
+        )
+        period_id = db.get_or_create_period(
+            period_type_name,
+            period_name,
+            start_date,
+            end_date,
+        )
         db.upsert_statistic(territory_id, indicator_id, period_id, rec.value)
 
+
+def validate_period_dates(
+    db: DB,
+) -> None:
+
+    with db.conn.cursor() as cur:
+
+        cur.execute(
+            """
+            SELECT name
+            FROM period
+            WHERE start_date IS NULL
+               OR end_date IS NULL
+            ORDER BY name
+            LIMIT 20
+            """
+        )
+
+        rows = cur.fetchall()
+
+    if rows:
+        invalid_names = [
+            row[0]
+            for row in rows
+        ]
+
+        raise RuntimeError(
+            "Обнаружены периоды "
+            "без start_date/end_date: "
+            + ", ".join(
+                invalid_names
+            )
+        )
 
 def main():
 
@@ -453,6 +586,17 @@ def main():
 
             total_records += len(records)
 
+        print(
+            "Проверяем даты периодов..."
+        )
+
+        validate_period_dates(
+            db
+        )
+
+        print(
+            "Все периоды имеют даты"
+        )
 
         print("\nСохраняем транзакцию...")
         db.commit()

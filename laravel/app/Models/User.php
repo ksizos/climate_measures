@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class User extends Authenticatable
 {
@@ -19,7 +20,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'full_name',
-        'organization',
+        'organization_id',
         'position',
         'email',
         'password',
@@ -64,5 +65,14 @@ class User extends Authenticatable
     public function isUser(): bool
     {
         return $this->role === self::ROLE_USER;
+    }
+
+    
+
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(
+            Organization::class
+        );
     }
 }

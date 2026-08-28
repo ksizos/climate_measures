@@ -33,11 +33,11 @@ def get_statistics_metadata(
                 COALESCE(ind.name, '') AS industry_name
             FROM indicator i
             JOIN section s
-                ON s.section_id = i.section_id
+                ON s.id = i.section_id
             JOIN unit u
-                ON u.unit_id = i.unit_id
+                ON u.id = i.unit_id
             LEFT JOIN industry ind
-                ON ind.industry_id = s.industry_id
+                ON ind.id = s.industry_id
             ORDER BY s.name, i.name
             """,
             connection,
@@ -50,7 +50,7 @@ def get_statistics_metadata(
                 COALESCE(tt.name, '') AS territory_type
             FROM territory t
             LEFT JOIN territory_type tt
-                ON tt.territory_type_id = t.territory_type_id
+                ON tt.id = t.territory_type_id
             ORDER BY t.name
             """,
             connection,
@@ -65,7 +65,7 @@ def get_statistics_metadata(
                 p.end_date
             FROM period p
             LEFT JOIN period_type pt
-                ON pt.period_type_id = p.period_type_id
+                ON pt.id = p.period_type_id
             ORDER BY p.name
             """,
             connection,
@@ -130,17 +130,17 @@ def get_indicators_for_territories(
                 u.name AS unit_name,
                 COALESCE(ind.name, '') AS industry_name,
                 t.name AS territory_name
-            FROM statistic st
-            JOIN territory t
-                ON t.territory_id = st.territory_id
-            JOIN indicator i
-                ON i.indicator_id = st.indicator_id
-            JOIN section s
-                ON s.section_id = i.section_id
-            JOIN unit u
-                ON u.unit_id = i.unit_id
-            LEFT JOIN industry ind
-                ON ind.industry_id = s.industry_id
+                FROM statistic st
+                JOIN territory t
+                    ON t.id = st.territory_id
+                JOIN indicator i
+                    ON i.id = st.indicator_id
+                JOIN section s
+                    ON s.id = i.section_id
+                JOIN unit u
+                    ON u.id = i.unit_id
+                LEFT JOIN industry ind
+                    ON ind.id = s.industry_id
             WHERE t.name = ANY(%s)
             ORDER BY i.name
         """

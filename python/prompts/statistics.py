@@ -55,23 +55,69 @@ STATISTICS_ANSWER_SYSTEM_PROMPT = """
 
 STATISTICS_SCHEMA_DESCRIPTION = """
 Таблицы БД статистики:
-- industry(industry_id, name) — отрасль/категория секции.
-- territory_type(territory_type_id, name) — тип территории.
-- unit(unit_id, name) — единица измерения показателя.
-- period_type(period_type_id, name) — тип периода, например "период" или "дата".
-- territory(territory_id, parent_territory_id, territory_type_id, name) — территория, например район.
-- section(section_id, industry_id, name) — раздел статистики.
-- indicator(indicator_id, section_id, unit_id, name) — показатель.
-- period(period_id, period_type_id, name, start_date, end_date) — период или дата.
-- statistic(statistic_id, territory_id, indicator_id, period_id, value) — числовое значение.
+
+- industry(id, name) — отрасль/категория секции.
+
+- territory_type(id, name) — тип территории.
+
+- unit(id, name) — единица измерения показателя.
+
+- period_type(id, name) — тип периода,
+  например "период" или "дата".
+
+- territory(
+    id,
+    parent_territory_id,
+    territory_type_id,
+    name
+  ) — территория, например район.
+
+- section(
+    id,
+    industry_id,
+    name
+  ) — раздел статистики.
+
+- indicator(
+    id,
+    section_id,
+    unit_id,
+    name
+  ) — показатель.
+
+- period(
+    id,
+    period_type_id,
+    name,
+    start_date,
+    end_date
+  ) — период или дата.
+
+- statistic(
+    id,
+    territory_id,
+    indicator_id,
+    period_id,
+    value
+  ) — числовое значение.
 
 Основные связи:
-- statistic.territory_id -> territory.territory_id
-- statistic.indicator_id -> indicator.indicator_id
-- statistic.period_id -> period.period_id
-- indicator.section_id -> section.section_id
-- indicator.unit_id -> unit.unit_id
-- section.industry_id -> industry.industry_id
-- period.period_type_id -> period_type.period_type_id
-- territory.territory_type_id -> territory_type.territory_type_id
+
+- statistic.territory_id -> territory.id
+
+- statistic.indicator_id -> indicator.id
+
+- statistic.period_id -> period.id
+
+- indicator.section_id -> section.id
+
+- indicator.unit_id -> unit.id
+
+- section.industry_id -> industry.id
+
+- period.period_type_id -> period_type.id
+
+- territory.territory_type_id -> territory_type.id
+
+- territory.parent_territory_id -> territory.id
 """

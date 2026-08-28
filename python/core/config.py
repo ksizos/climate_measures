@@ -154,7 +154,7 @@ APP_TITLE = os.getenv("APP_TITLE")
 
 LLM_PROVIDER = os.getenv(
     "LLM_PROVIDER",
-    "local",
+    "",
 ).strip().lower()
 
 

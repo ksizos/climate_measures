@@ -77,11 +77,13 @@ def format_statistics_context(
     )
 
     indicators_lines = [
-        (
-            "- indicator.name = "
-            f"{row.get('indicator_name', '')}"
-        )
-        for _, row in top_indicators_df.iterrows()
+    (
+        f"- indicator.name = {row.get('indicator_name', '')} | "
+        f"unit = {row.get('unit_name', '')} | "
+        f"section = {row.get('section_name', '')} | "
+        f"industry = {row.get('industry_name', '')}"
+    )
+    for _, row in top_indicators_df.iterrows()
     ]
 
     if not matched_territories_df.empty:
@@ -230,15 +232,19 @@ def generate_statistics_sql(
         max_new_tokens=700,
     )  
 
-    logger.debug(
-        "Ответ SQL-модели: %s",
+    logger.info(
+        "RAW ответ SQL-модели:\n%s",
         raw_sql,
     )
 
     extracted_sql = extract_sql_from_llm_response(
         raw_sql
     )
-
+    logger.info(
+        "Извлечённый SQL:\n%s",
+        extracted_sql,
+    )
+    print(extracted_sql)
     return validate_statistics_sql(
         extracted_sql
     )

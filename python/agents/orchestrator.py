@@ -12,7 +12,7 @@ from core.config import (
     AGGREGATOR_MAX_TOKENS,
     ORCHESTRATOR_MAX_TOKENS,
 )
-from infrastructure.llm.local_yandex import (
+from infrastructure.llm.provider import (
     achat_text,
 )
 from prompts.aggregation import (

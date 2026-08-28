@@ -87,7 +87,7 @@ def get_statistics_metadata(
                 COALESCE(ind.name, '') AS industry_name
             FROM section s
             LEFT JOIN industry ind
-                ON ind.industry_id = s.industry_id
+                ON ind.id = s.industry_id
             ORDER BY s.name
             """,
             connection,

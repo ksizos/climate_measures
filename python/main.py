@@ -15,7 +15,10 @@ from api.routes import (
     questions,
     structured_data,
 )
-from core.config import APP_TITLE
+from core.config import (
+    APP_TITLE,
+    LLM_PROVIDER,
+)
 from core.logging_config import setup_logging
 
 from infrastructure.llm.provider import (
@@ -77,7 +80,8 @@ def create_app() -> FastAPI:
     @application.on_event("startup")
     async def startup_event() -> None:
         logger.info(
-            "Загрузка локальной YandexGPT..."
+            "Инициализация LLM-провайдера: %s",
+            LLM_PROVIDER,
         )
 
         await asyncio.to_thread(
@@ -85,13 +89,14 @@ def create_app() -> FastAPI:
         )
 
         logger.info(
-            "Локальная YandexGPT загружена."
+            "LLM-провайдер %s инициализирован.",
+            LLM_PROVIDER,
         )
 
         logger.info(
             "Приложение %s запущено",
             APP_TITLE,
-        )
+    )
 
     @application.on_event("shutdown")
     async def shutdown_event() -> None:

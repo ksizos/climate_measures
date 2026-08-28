@@ -286,7 +286,7 @@ class DB:
                         SET
                             start_date = %s,
                             end_date = %s
-                        WHERE period_id = %s
+                        WHERE id = %s
                         """,
                         (
                             start_date,
@@ -305,7 +305,7 @@ class DB:
                         end_date
                     )
                     VALUES (%s, %s, %s, %s)
-                    RETURNING period_id
+                    RETURNING id
                     """,
                     (
                         period_type_id,

@@ -28,11 +28,34 @@ STATISTICS_SQL_SYSTEM_PROMPT = """
    - period.start_date AS "Дата начала"
    - period.end_date AS "Дата окончания"
    - statistic.value AS "Значение"
-12. Обычно нужны JOIN:
-   - statistic -> territory, indicator, period
-   - indicator -> section, unit
-   - section -> industry
-   - period -> period_type
+12. Если возвращается полная строка статистики, используй следующие JOIN строго в таком виде:
+
+FROM statistic
+
+JOIN territory
+    ON statistic.territory_id = territory.id
+
+JOIN indicator
+    ON statistic.indicator_id = indicator.id
+
+JOIN section
+    ON indicator.section_id = section.id
+
+JOIN industry
+    ON section.industry_id = industry.id
+
+JOIN unit
+    ON indicator.unit_id = unit.id
+
+JOIN period
+    ON statistic.period_id = period.id
+
+JOIN period_type
+    ON period.period_type_id = period_type.id
+
+Если поле какой-либо таблицы используется в SELECT, WHERE,
+GROUP BY, HAVING или ORDER BY, соответствующая таблица
+обязательно должна присутствовать в FROM или JOIN.
 13. Если пользователь просит одно значение, всё равно возвращай полную строку со всеми полями.
 14. Если пользователь просит несколько районов, сравнение, сумму или разницу — допускаются SUM, CASE WHEN, GROUP BY, CTE / WITH.
 15. Для поиска показателя ориентируйся прежде всего на indicator.name.
@@ -50,6 +73,7 @@ STATISTICS_ANSWER_SYSTEM_PROMPT = """
 Если строк несколько, оформи результат списком или Markdown-таблицей.
 Если результат пустой, честно скажи, что по заданным параметрам данные не найдены.
 Если пользователь просил перевод единиц измерения, выполни перевод только если это возможно однозначно.
+В ответе используй единицу измерения такую, какую попросил пользователь.
 Выделяй важные числа жирным шрифтом.
 """
 

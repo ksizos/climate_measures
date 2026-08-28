@@ -20,8 +20,12 @@ def extract_sql_from_llm_response(
 
     sql = text.strip()
 
+    # Убираем Markdown-блоки:
+    # ```sql
+    # ```postgresql
+    # ```
     sql = re.sub(
-        r"^```sql\s*",
+        r"^```(?:sql|postgresql)?\s*",
         "",
         sql,
         flags=re.IGNORECASE,
@@ -33,11 +37,37 @@ def extract_sql_from_llm_response(
         sql,
     )
 
+    sql = sql.strip()
+
+    # Если модель всё-таки добавила пояснение
+    # перед SQL, берём текст начиная
+    # с первого SELECT или WITH.
+    match = re.search(
+        r"\b(SELECT|WITH)\b",
+        sql,
+        flags=re.IGNORECASE,
+    )
+
+    if match:
+        sql = sql[
+            match.start():
+        ]
+
+    # Исправление иногда возникающих
+    # двойных кавычек у DATE.
     sql = re.sub(
         r"DATE\s+''(\d{4}-\d{2}-\d{2})''",
         r"DATE '\1'",
         sql,
         flags=re.IGNORECASE,
+    )
+
+    # Убираем возможный закрывающий
+    # Markdown-блок после SQL.
+    sql = re.sub(
+        r"\s*```\s*$",
+        "",
+        sql,
     )
 
     return sql.strip()

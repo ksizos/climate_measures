@@ -254,7 +254,6 @@
     height: auto;
 
     margin-top: 3px;
-    padding: 8px;
 
     border: none;
     border-radius: 10px;
@@ -427,19 +426,12 @@
 .search {
     width: 100%;
     height: 40px;
-
     padding: 0 20px 0 30px;
-
     box-sizing: border-box;
-
     border: 1px solid rgb(234, 231, 231);
-
     border-radius: 15px;
-
     background-color: white;
-
-    font-size: 14px;
-
+    font-size: 13px;
     transition:
         border-color 0.2s ease,
         box-shadow 0.2s ease;
@@ -481,10 +473,17 @@ input[type="search"]::-webkit-search-cancel-button {
    ========================================================= */
 
 .scroll_container {
-    max-height: 60vh;
+    opacity: 1;
+    transform: translateY(0);
 
-    overflow-y: auto;
-    overflow-x: hidden;
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease;
+}
+
+.scroll_container.is-sorting {
+    opacity: 0;
+    transform: translateY(4px);
 }
 
 .scroll_header {
@@ -507,11 +506,6 @@ input[type="search"]::-webkit-search-cancel-button {
     transition:
         opacity 0.18s ease,
         transform 0.18s ease;
-}
-
-.scroll_container.is-sorting {
-    opacity: 0;
-    transform: translateY(4px);
 }
 
 /* =========================================================
@@ -674,11 +668,6 @@ input[type="search"]::-webkit-search-cancel-button {
     opacity: 0;
 
     z-index: 2000;
-
-    transition:
-        opacity 0.15s ease,
-        display 0.15s allow-discrete,
-        overlay 0.15s allow-discrete;
 }
 
 .conversation-settings-panel:popover-open {
@@ -740,11 +729,8 @@ input[type="search"]::-webkit-search-cancel-button {
 .conversation_panel_image {
     width: 14px;
     height: auto;
-
     margin-right: 7px;
-
     flex-shrink: 0;
-
     cursor: pointer;
 }
 
@@ -1067,4 +1053,394 @@ input[type="search"]::-webkit-search-cancel-button {
     cursor: default;
 
     transform: none;
+}
+
+.rename-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 20px;
+
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+
+    transition:
+        opacity 0.18s ease,
+        visibility 0.18s ease;
+}
+
+.rename-modal.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.rename-modal__backdrop {
+    position: absolute;
+    inset: 0;
+
+    background-color: rgba(0, 0, 0, 0.22);
+
+    backdrop-filter: blur(2px);
+}
+
+.rename-modal__dialog {
+    position: relative;
+    z-index: 1;
+
+    width: min(100%, 360px);
+
+    padding: 22px;
+
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+
+    background-color: #fff;
+
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.14);
+
+    transform: translateY(8px) scale(0.98);
+
+    transition: transform 0.18s ease;
+}
+
+.rename-modal.is-open .rename-modal__dialog {
+    transform: translateY(0) scale(1);
+}
+
+.rename-modal__title {
+    margin: 0 0 16px;
+
+    color: var(--color-text);
+
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.rename-modal__field {
+    position: relative;
+}
+
+.rename-modal__input {
+    width: 100%;
+    height: 42px;
+
+    padding: 0 55px 0 12px;
+
+    border: 1px solid var(--border-color);
+
+    border-radius: 10px;
+
+    background-color: #fff;
+
+    color: var(--color-text);
+
+    font-size: 14px;
+
+    outline: none;
+
+    transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease;
+}
+
+.rename-modal__input:hover {
+    border-color: var(--border-color-green);
+}
+
+.rename-modal__input:focus {
+    border-color: var(--color-primary-dark);
+
+    box-shadow: 0 0 0 3px rgba(47, 105, 75, 0.1);
+}
+
+.rename-modal__counter {
+    position: absolute;
+
+    right: 11px;
+    top: 50%;
+
+    transform: translateY(-50%);
+
+    color: var(--color-text-muted);
+
+    font-size: 11px;
+
+    pointer-events: none;
+}
+
+.rename-modal__error {
+    min-height: 18px;
+
+    margin-top: 6px;
+
+    color: var(--color-text-red);
+
+    font-size: 12px;
+}
+
+.rename-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+
+    margin-top: 10px;
+}
+
+.rename-modal__button {
+    min-width: 95px;
+
+    padding: 8px 14px;
+
+    border-radius: 9px;
+
+    font-size: 13px;
+    font-weight: 500;
+
+    cursor: pointer;
+
+    transition:
+        background-color 0.18s ease,
+        border-color 0.18s ease,
+        opacity 0.18s ease;
+}
+
+.rename-modal__button--cancel {
+    border: 1px solid var(--border-color);
+
+    background-color: #fff;
+
+    color: var(--color-text);
+}
+
+.rename-modal__button--cancel:hover {
+    background-color: #f7f7f7;
+}
+
+.rename-modal__button--confirm {
+    border: 1px solid var(--color-primary-dark);
+
+    background-color: var(--color-primary-dark);
+
+    color: #fff;
+}
+
+.rename-modal__button--confirm:hover {
+    opacity: 0.9;
+}
+
+.rename-modal__button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* =========================================================
+   MOBILE SIDEBAR
+   ========================================================= */
+
+.sidebar-backdrop {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    /*
+     * Сам aside больше не участвует
+     * в flex-layout страницы.
+     *
+     * Поэтому чат и поле ввода
+     * получают всю ширину экрана.
+     */
+    .sidebar {
+        position: fixed;
+
+        top: 0;
+        left: 0;
+
+        width: 0;
+        min-width: 0;
+        max-width: none;
+
+        height: 0;
+
+        padding: 0;
+
+        overflow: visible;
+
+        background: transparent;
+
+        box-shadow: none;
+
+        z-index: 3000;
+
+        flex-shrink: initial;
+
+        transition: none;
+    }
+
+    /*
+     * Содержимое sidebar становится
+     * отдельной выезжающей панелью.
+     */
+    .sidebar-content {
+        position: fixed;
+
+        top: 0;
+        left: 0;
+
+        width: min(320px, 85vw);
+        height: 100dvh;
+
+        padding: 20px 10px;
+
+        box-sizing: border-box;
+
+        background-color: rgb(248, 248, 248);
+
+        opacity: 1;
+        visibility: visible;
+
+        transform: translateX(-100%);
+
+        pointer-events: none;
+
+        box-shadow: none;
+
+        z-index: 3000;
+
+        transition:
+            transform 0.25s ease,
+            box-shadow 0.25s ease;
+    }
+
+    /*
+     * Открытие панели.
+     */
+    .sidebar.mobile-open .sidebar-content {
+        transform: translateX(0);
+
+        pointer-events: auto;
+
+        box-shadow: 8px 0 28px rgba(0, 0, 0, 0.12);
+    }
+
+    /*
+     * Кнопка не является частью
+     * ширины layout.
+     *
+     * Она всегда остаётся на экране.
+     */
+    .sidebar-toggle-wrapper {
+        position: fixed;
+
+        top: 14px;
+        left: 12px;
+        right: auto;
+
+        z-index: 3200;
+
+        transition: left 0.25s ease;
+    }
+
+    .aside_img_block {
+        width: 42px;
+        height: 42px;
+
+        padding: 0;
+
+        background-color: white;
+
+        border-radius: 50%;
+
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+    }
+
+    /*
+     * Закрыто:
+     * стрелка направлена вправо.
+     */
+    .sidebar:not(.mobile-open) .aside_img {
+        transform: rotate(180deg) translateX(1.5px);
+    }
+
+    /*
+     * Открыто:
+     * кнопка перемещается внутрь
+     * правого края sidebar.
+     */
+    .sidebar.mobile-open .sidebar-toggle-wrapper {
+        left: calc(min(320px, 85vw) - 54px);
+    }
+
+    .sidebar.mobile-open .aside_img {
+        transform: rotate(0) translateX(0);
+    }
+
+    /*
+     * На мобильном старый
+     * sidebar-hidden полностью
+     * нейтрализуем.
+     */
+    .sidebar.sidebar-hidden {
+        width: 0;
+        min-width: 0;
+        max-width: none;
+
+        height: 0;
+
+        padding: 0;
+    }
+
+    .sidebar.sidebar-hidden .sidebar-content {
+        opacity: 1;
+        visibility: visible;
+
+        transform: translateX(-100%);
+
+        pointer-events: none;
+    }
+
+    /*
+     * Затемнение чата.
+     */
+    .sidebar-backdrop {
+        position: fixed;
+
+        inset: 0;
+
+        display: block;
+
+        z-index: 2900;
+
+        background: rgba(0, 0, 0, 0.18);
+
+        backdrop-filter: blur(2px);
+
+        -webkit-backdrop-filter: blur(2px);
+
+        opacity: 0;
+        visibility: hidden;
+
+        pointer-events: none;
+
+        transition:
+            opacity 0.25s ease,
+            visibility 0.25s ease;
+    }
+
+    .sidebar-backdrop.is-open {
+        opacity: 1;
+        visibility: visible;
+
+        pointer-events: auto;
+    }
+
+    body.sidebar-mobile-open {
+        overflow: hidden;
+    }
 }

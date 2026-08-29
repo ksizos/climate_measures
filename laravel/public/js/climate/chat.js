@@ -18,9 +18,10 @@ let currentAnswerElement = null;
 
 let isGenerating = false;
 
-/**
- * Инициализация чата.
- */
+/* =========================================================
+   ИНИЦИАЛИЗАЦИЯ
+   ========================================================= */
+
 export function initChat() {
     const questionInput = document.getElementById("question");
 
@@ -30,10 +31,6 @@ export function initChat() {
         return;
     }
 
-    /**
-     * Автоматическая высота textarea
-     * + состояние submit.
-     */
     questionInput.addEventListener("input", function () {
         this.style.height = "auto";
 
@@ -44,9 +41,6 @@ export function initChat() {
         }
     });
 
-    /**
-     * Ctrl + Enter / Cmd + Enter.
-     */
     questionInput.addEventListener("keydown", (event) => {
         if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
             event.preventDefault();
@@ -57,9 +51,6 @@ export function initChat() {
         }
     });
 
-    /**
-     * Отправка / остановка.
-     */
     submitBtn.addEventListener("click", () => {
         if (isGenerating) {
             stopGeneration();
@@ -73,9 +64,10 @@ export function initChat() {
     questionInput.focus();
 }
 
-/**
- * Уникальный ID конкретной генерации.
- */
+/* =========================================================
+   REQUEST ID
+   ========================================================= */
+
 function createRequestId() {
     if (
         typeof crypto !== "undefined" &&
@@ -87,9 +79,10 @@ function createRequestId() {
     return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
 }
 
-/**
- * submit.svg <-> stop.svg
- */
+/* =========================================================
+   СОСТОЯНИЕ ГЕНЕРАЦИИ
+   ========================================================= */
+
 function setGeneratingState(generating) {
     const submitBtn = document.getElementById("submitBtn");
 
@@ -102,10 +95,6 @@ function setGeneratingState(generating) {
     isGenerating = generating;
 
     if (generating) {
-        /*
-         * Кнопка STOP должна оставаться
-         * доступной во время генерации.
-         */
         submitBtn.disabled = false;
 
         submitBtn.classList.add("is-generating");
@@ -121,13 +110,11 @@ function setGeneratingState(generating) {
 
     submitBtn.disabled = !questionInput?.value.trim();
 }
-/**
- * Отправляет серверу команду STOP.
- *
- * Ошибки здесь намеренно игнорируются:
- * пользователь не должен видеть
- * уведомлений при остановке.
- */
+
+/* =========================================================
+   CANCEL SERVER GENERATION
+   ========================================================= */
+
 async function cancelServerGeneration(requestId) {
     if (!requestId) {
         return;
@@ -154,25 +141,21 @@ async function cancelServerGeneration(requestId) {
             }),
         });
     } catch {
-        /*
-         * Ошибка остановки
-         * не выводится пользователю.
-         */
+        // STOP не должен
+        // создавать дополнительную
+        // пользовательскую ошибку.
     }
 }
 
-/**
- * Немедленная остановка генерации.
- */
+/* =========================================================
+   STOP
+   ========================================================= */
+
 async function stopGeneration() {
     if (!isGenerating) {
         return;
     }
 
-    /*
-     * Запоминаем значения именно
-     * отменяемого запроса.
-     */
     const requestId = currentRequestId;
 
     const controller = currentRequestController;
@@ -180,12 +163,7 @@ async function stopGeneration() {
     const answerElement = currentAnswerElement;
 
     /*
-     * Сразу помечаем запрос
-     * остановленным.
-     *
-     * Это важно, чтобы старый запрос
-     * больше не считался активным
-     * на клиенте.
+     * Сначала отвязываем текущий запрос.
      */
     currentRequestId = null;
 
@@ -193,21 +171,19 @@ async function stopGeneration() {
 
     currentAnswerElement = null;
 
-    /*
-     * Сразу возвращаем кнопку
-     * в состояние submit.
-     */
     setGeneratingState(false);
 
     /*
-     * Вместо удаления сообщения
-     * показываем статус остановки.
+     * Меняем loading
+     * на сообщение STOP.
      */
     if (answerElement) {
         const messageContent = answerElement.querySelector(".message-content");
 
         if (messageContent) {
             messageContent.classList.remove("processing-content");
+
+            messageContent.classList.add("markdown-content");
 
             messageContent.innerHTML = `
                 <span class="generation-stopped">
@@ -218,20 +194,11 @@ async function stopGeneration() {
     }
 
     /*
-     * Сначала отправляем серверу
-     * настоящую команду отмены.
-     *
-     * ВАЖНО:
-     * browser fetch /ask пока ещё
-     * не прерываем, чтобы Laravel
-     * успел выполнить /cancel.
+     * Сначала сообщаем Python,
+     * затем abort браузерного запроса.
      */
     await cancelServerGeneration(requestId);
 
-    /*
-     * После отправки STOP
-     * разрываем старый /ask.
-     */
     if (controller) {
         controller.abort();
     }
@@ -241,9 +208,10 @@ async function stopGeneration() {
     questionInput?.focus();
 }
 
-/**
- * Очистка сообщений.
- */
+/* =========================================================
+   ОЧИСТКА ЧАТА
+   ========================================================= */
+
 export function clearChatMessages() {
     const chatMessages = document.getElementById("chatMessages");
 
@@ -254,10 +222,11 @@ export function clearChatMessages() {
     chatMessages.innerHTML = "";
 }
 
-/**
- * Добавление вопроса + ответа.
- */
-export function addQuestionAnswerPair(question, answer) {
+/* =========================================================
+   ДОБАВЛЕНИЕ ПАРЫ СООБЩЕНИЙ
+   ========================================================= */
+
+export function addQuestionAnswerPair(question, answer, status = "success") {
     const chatMessages = document.getElementById("chatMessages");
 
     if (!chatMessages) {
@@ -268,7 +237,7 @@ export function addQuestionAnswerPair(question, answer) {
     }
 
     /*
-     * Пользователь.
+     * USER MESSAGE
      */
     const questionDiv = document.createElement("div");
 
@@ -283,7 +252,7 @@ export function addQuestionAnswerPair(question, answer) {
     chatMessages.appendChild(questionDiv);
 
     /*
-     * Ассистент.
+     * ASSISTANT MESSAGE
      */
     const answerDiv = document.createElement("div");
 
@@ -291,19 +260,72 @@ export function addQuestionAnswerPair(question, answer) {
 
     chatMessages.appendChild(answerDiv);
 
-    const markdownHTML = marked.parse(answer || "");
+    /*
+     * ERROR
+     */
+    if (status === "error") {
+        answerDiv.innerHTML = `
+            <div
+                class="message-content markdown-content"
+            >
+                <span class="text-danger">
+                    ${escapeHtml(answer || "Произошла ошибка.")}
+                </span>
+            </div>
+        `;
 
-    const safeHTML = addTargetBlankToLinks(markdownHTML);
+        /*
+         * STOPPED
+         */
+    } else if (status === "stopped") {
+        answerDiv.innerHTML = `
+            <div
+                class="message-content markdown-content"
+            >
+                <span class="generation-stopped">
+                    ${escapeHtml(answer || "Генерация остановлена")}
+                </span>
+            </div>
+        `;
 
-    answerDiv.innerHTML = `
-        <div
-            class="message-content markdown-content"
-        >
-            ${safeHTML}
-        </div>
-    `;
+        /*
+         * SUCCESS
+         */
+    } else {
+        const normalizedAnswer = String(answer ?? "").trim();
 
-    setupAnswerActions(answerDiv);
+        /*
+         * Дополнительная защита
+         * при загрузке старых
+         * пустых сообщений.
+         */
+        if (!normalizedAnswer) {
+            answerDiv.innerHTML = `
+                <div
+                    class="message-content markdown-content"
+                >
+                    <span class="text-danger">
+                        Модель не вернула ответ.
+                        Попробуйте повторить запрос.
+                    </span>
+                </div>
+            `;
+        } else {
+            const markdownHTML = marked.parse(normalizedAnswer);
+
+            const safeHTML = addTargetBlankToLinks(markdownHTML);
+
+            answerDiv.innerHTML = `
+                <div
+                    class="message-content markdown-content"
+                >
+                    ${safeHTML}
+                </div>
+            `;
+
+            setupAnswerActions(answerDiv);
+        }
+    }
 
     scrollToBottom();
 
@@ -313,9 +335,10 @@ export function addQuestionAnswerPair(question, answer) {
     };
 }
 
-/**
- * Действия над таблицами ответа.
- */
+/* =========================================================
+   ACTIONS ДЛЯ ОТВЕТА
+   ========================================================= */
+
 function setupAnswerActions(answerDiv) {
     if (!answerDiv) {
         return;
@@ -370,6 +393,7 @@ function setupAnswerActions(answerDiv) {
     if (exportDocxBtn) {
         exportDocxBtn.addEventListener("click", (event) => {
             event.preventDefault();
+
             event.stopPropagation();
 
             const tableHtml = markdownContent.innerHTML;
@@ -387,6 +411,7 @@ function setupAnswerActions(answerDiv) {
     if (exportExcelBtn) {
         exportExcelBtn.addEventListener("click", (event) => {
             event.preventDefault();
+
             event.stopPropagation();
 
             const tableHtml = markdownContent.innerHTML;
@@ -400,9 +425,10 @@ function setupAnswerActions(answerDiv) {
     }
 }
 
-/**
- * Отправка сообщения.
- */
+/* =========================================================
+   ОТПРАВКА СООБЩЕНИЯ
+   ========================================================= */
+
 async function sendMessage() {
     if (isGenerating) {
         return;
@@ -424,18 +450,22 @@ async function sendMessage() {
 
     state.lastQuestion = question;
 
+    /*
+     * Сначала показываем
+     * пользовательский вопрос.
+     */
     const pairElements = addQuestionAnswerPair(question, "");
 
     if (!pairElements.questionDiv || !pairElements.answerDiv) {
         return;
     }
 
-    /*
-     * Текущее незавершённое
-     * сообщение ассистента.
-     */
     currentAnswerElement = pairElements.answerDiv;
 
+    /*
+     * Loading внутри
+     * assistant-message.
+     */
     pairElements.answerDiv.innerHTML = `
         <div
             class="
@@ -457,24 +487,14 @@ async function sendMessage() {
 
     scrollToElement(pairElements.questionDiv);
 
-    /*
-     * Очищаем textarea.
-     */
     questionInput.value = "";
 
     questionInput.style.height = "auto";
 
-    /*
-     * Уникальный запрос.
-     */
     const requestId = createRequestId();
 
     currentRequestId = requestId;
 
-    /*
-     * AbortController относится
-     * только к этому запросу.
-     */
     const controller = new AbortController();
 
     currentRequestController = controller;
@@ -502,6 +522,8 @@ async function sendMessage() {
             headers: {
                 "Content-Type": "application/json",
 
+                Accept: "application/json",
+
                 "X-CSRF-TOKEN": csrfToken,
 
                 "X-Requested-With": "XMLHttpRequest",
@@ -513,33 +535,83 @@ async function sendMessage() {
         });
 
         /*
-         * Если запрос уже остановлен,
-         * ничего больше не рендерим.
+         * Запрос уже отменён
+         * или был заменён другим.
          */
         if (currentRequestId !== requestId) {
             return;
         }
 
-        const data = await response.json();
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch {
+            data = {
+                success: false,
+
+                error: "Сервис вернул некорректный ответ.",
+            };
+        }
 
         if (currentRequestId !== requestId) {
             return;
         }
 
+        /*
+         * conversation_id сохраняем
+         * даже при error.
+         *
+         * Иначе после ошибки следующий
+         * вопрос создаст новый диалог.
+         */
+        if (data.conversation_id) {
+            state.currentConversationId = data.conversation_id;
+        }
+
+        /*
+         * =====================================================
+         * SUCCESS
+         * =====================================================
+         */
+
         if (data.success) {
-            if (data.conversation_id) {
-                state.currentConversationId = data.conversation_id;
-            }
+            const answer = String(data.answer ?? "").trim();
 
             const messageContent =
                 pairElements.answerDiv.querySelector(".message-content");
+
+            /*
+             * Дополнительная frontend-защита
+             * от success=true + answer="".
+             */
+            if (!answer) {
+                if (messageContent) {
+                    messageContent.classList.remove("processing-content");
+
+                    messageContent.classList.add("markdown-content");
+
+                    messageContent.innerHTML = `
+                        <span class="text-danger">
+                            Модель не вернула ответ.
+                            Попробуйте повторить запрос.
+                        </span>
+                    `;
+                }
+
+                await loadConversations();
+
+                scrollToElement(pairElements.answerDiv);
+
+                return;
+            }
 
             if (messageContent) {
                 messageContent.classList.remove("processing-content");
 
                 messageContent.classList.add("markdown-content");
 
-                const markdownHTML = marked.parse(data.answer || "");
+                const markdownHTML = marked.parse(answer);
 
                 const safeHTML = addTargetBlankToLinks(markdownHTML);
 
@@ -550,10 +622,16 @@ async function sendMessage() {
 
             scrollToElement(pairElements.answerDiv);
 
-            loadConversations();
+            await loadConversations();
 
             return;
         }
+
+        /*
+         * =====================================================
+         * ERROR ОТ LARAVEL
+         * =====================================================
+         */
 
         const messageContent =
             pairElements.answerDiv.querySelector(".message-content");
@@ -569,26 +647,35 @@ async function sendMessage() {
                 </span>
             `;
         }
+
+        /*
+         * Ошибка тоже сохранена
+         * в messages.
+         */
+        await loadConversations();
+
+        scrollToElement(pairElements.answerDiv);
     } catch (err) {
         /*
-         * STOP.
-         *
-         * Без текста,
-         * без alert,
-         * без сообщения.
+         * STOP через AbortController.
          */
         if (err.name === "AbortError") {
             return;
         }
 
-        /*
-         * Если это уже не текущий
-         * request — игнорируем.
-         */
         if (currentRequestId !== requestId) {
             return;
         }
 
+        /*
+         * Эта ветка нужна, если
+         * невозможно обратиться уже
+         * к самому Laravel.
+         *
+         * Python-ошибки сюда обычно
+         * не попадут — Laravel их
+         * преобразует в JSON.
+         */
         const messageContent =
             pairElements.answerDiv?.querySelector(".message-content");
 
@@ -599,18 +686,26 @@ async function sendMessage() {
 
             messageContent.innerHTML = `
                 <span class="text-danger">
-                    Ошибка:
-                    ${escapeHtml(err.message)}
+                    ${escapeHtml(err.message || "Не удалось выполнить запрос.")}
                 </span>
             `;
         }
+
+        /*
+         * Пробуем обновить историю,
+         * если Laravel всё-таки доступен.
+         */
+        try {
+            await loadConversations();
+        } catch {
+            // Ничего не делаем.
+        }
+
+        scrollToElement(pairElements.answerDiv);
     } finally {
         /*
-         * Очень важно:
-         *
-         * старый остановленный request
-         * не должен сбросить состояние
-         * уже нового запроса.
+         * Сбрасываем состояние только
+         * если это всё ещё тот же запрос.
          */
         if (currentRequestId === requestId) {
             currentRequestId = null;
@@ -624,9 +719,10 @@ async function sendMessage() {
     }
 }
 
-/**
- * Карточки примеров.
- */
+/* =========================================================
+   КАРТОЧКИ ПРИМЕРОВ
+   ========================================================= */
+
 document.querySelectorAll(".example_card").forEach((card) => {
     card.addEventListener("click", () => {
         const question = card.dataset.question;

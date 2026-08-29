@@ -44,7 +44,7 @@ $randomExamples = collect($examples)->shuffle()->take(4);
         Попробуйте готовые примеры запросов
     </p>
 
-    <div class="d-flex align-items-center justify-content-center gap-3">
+    <div class="examples-grid">
 
         @foreach($randomExamples as $example)
 

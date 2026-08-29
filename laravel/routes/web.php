@@ -271,6 +271,13 @@ Route::middleware([
         ],
     )->name('conversation.get');
 
+    Route::patch(
+        '/climate/conversation/{id}/title',
+        [
+            ClimateController::class,
+            'renameConversation',
+        ],
+    )->name('conversation.rename');
 
     Route::delete(
         '/climate/conversation/{id}',
@@ -279,6 +286,14 @@ Route::middleware([
             'deleteConversation',
         ],
     )->name('conversation.delete');
+
+    Route::delete(
+        '/climate/conversations',
+        [
+            ClimateController::class,
+            'clearConversations',
+        ],
+    )->name('conversations.clear');
 
 
     /*

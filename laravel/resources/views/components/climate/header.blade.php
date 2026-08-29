@@ -36,7 +36,7 @@
 
             <div class="profile-panel__menu">
 
-                <a
+                <!-- <a
                     href="#"
                     class="profile-panel__item">
                     Профиль
@@ -45,7 +45,7 @@
                 <a
                     href="#"
                     class="profile-panel__item">
-                    Настройки
+                    Настройки -->
                 </a>
 
                 <form

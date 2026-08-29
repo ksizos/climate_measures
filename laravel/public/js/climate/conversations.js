@@ -13,10 +13,17 @@ import { clearChatMessages, addQuestionAnswerPair } from "./chat.js";
 import { escapeHtml } from "./utils.js";
 
 let conversationsCache = [];
+let conversationPendingRename = null;
 
 let currentSort = "new";
 
 let conversationPendingDelete = null;
+let deleteModalMode = null;
+
+let currentSearch = "";
+let searchTimeout = null;
+
+let conversationsRequestController = null;
 
 /* =========================================================
    НОВЫЙ ДИАЛОГ
@@ -45,14 +52,169 @@ export async function startNewConversation() {
 }
 
 /* =========================================================
-   ЗАГРУЗКА ДИАЛОГА
+   ПЕРЕИМЕНОВАНИЕ
+   ========================================================= */
+
+async function renameConversation(id, title) {
+    try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+
+        const response = await fetch(`/climate/conversation/${id}/title`, {
+            method: "PATCH",
+
+            headers: {
+                "X-CSRF-TOKEN": csrfToken?.content ?? "",
+
+                "X-Requested-With": "XMLHttpRequest",
+
+                Accept: "application/json",
+
+                "Content-Type": "application/json",
+            },
+
+            body: JSON.stringify({
+                title,
+            }),
+        });
+
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch {
+            data = {};
+        }
+
+        if (!response.ok || !data.success) {
+            return {
+                success: false,
+
+                message:
+                    data.message ||
+                    data.error ||
+                    "Не удалось переименовать диалог.",
+            };
+        }
+
+        const conversation = conversationsCache.find(
+            (item) => String(item.id) === String(id),
+        );
+
+        if (conversation) {
+            conversation.title = data.conversation?.title ?? title;
+        }
+
+        animateConversationsRender();
+
+        return {
+            success: true,
+        };
+    } catch (error) {
+        console.error("Ошибка переименования диалога:", error);
+
+        return {
+            success: false,
+
+            message: "Не удалось переименовать диалог.",
+        };
+    }
+}
+
+function openRenameConversationModal(id) {
+    const modal = document.getElementById("renameConversationModal");
+
+    const input = document.getElementById("renameConversationInput");
+
+    const counter = document.getElementById("renameConversationCounter");
+
+    const error = document.getElementById("renameConversationError");
+
+    const confirmButton = document.getElementById("confirmRenameConversation");
+
+    if (!modal || !input) {
+        return;
+    }
+
+    const conversation = conversationsCache.find(
+        (item) => String(item.id) === String(id),
+    );
+
+    conversationPendingRename = id;
+
+    input.value = conversation?.title ?? "";
+
+    if (counter) {
+        counter.textContent = String(input.value.length);
+    }
+
+    if (error) {
+        error.textContent = "";
+    }
+
+    if (confirmButton) {
+        confirmButton.disabled = false;
+
+        confirmButton.textContent = "Сохранить";
+    }
+
+    const openedPopover = document.querySelector(
+        ".conversation-settings-panel:popover-open",
+    );
+
+    if (openedPopover && typeof openedPopover.hidePopover === "function") {
+        openedPopover.hidePopover();
+    }
+
+    modal.classList.add("is-open");
+
+    modal.setAttribute("aria-hidden", "false");
+
+    document.body.style.overflow = "hidden";
+
+    requestAnimationFrame(() => {
+        input.focus();
+
+        input.select();
+    });
+}
+
+function closeRenameConversationModal() {
+    const modal = document.getElementById("renameConversationModal");
+
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.remove("is-open");
+
+    modal.setAttribute("aria-hidden", "true");
+
+    document.body.style.overflow = "";
+
+    conversationPendingRename = null;
+
+    const error = document.getElementById("renameConversationError");
+
+    if (error) {
+        error.textContent = "";
+    }
+}
+
+/* =========================================================
+   ЗАГРУЗКА КОНКРЕТНОГО ДИАЛОГА
    ========================================================= */
 
 export async function loadConversation(id) {
     try {
         hideError();
 
-        const response = await fetch(`/climate/conversation/${id}`);
+        const response = await fetch(`/climate/conversation/${id}`, {
+            headers: {
+                Accept: "application/json",
+
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        });
 
         const data = await response.json();
 
@@ -72,7 +234,11 @@ export async function loadConversation(id) {
 
         if (data.conversation && Array.isArray(data.conversation.messages)) {
             data.conversation.messages.forEach((pair) => {
-                addQuestionAnswerPair(pair.question, pair.answer);
+                addQuestionAnswerPair(
+                    pair.question,
+                    pair.answer,
+                    pair.status ?? "success",
+                );
             });
         }
 
@@ -83,7 +249,73 @@ export async function loadConversation(id) {
 }
 
 /* =========================================================
-   УДАЛЕНИЕ ДИАЛОГА
+   ЗАГРУЗКА ИСТОРИИ + ПОИСК
+   ========================================================= */
+
+export async function loadConversations(search = currentSearch) {
+    let requestController = null;
+
+    try {
+        currentSearch = String(search ?? "").trim();
+
+        if (conversationsRequestController) {
+            conversationsRequestController.abort();
+        }
+
+        requestController = new AbortController();
+
+        conversationsRequestController = requestController;
+
+        const params = new URLSearchParams();
+
+        if (currentSearch) {
+            params.set("search", currentSearch);
+        }
+
+        const url = params.toString()
+            ? `/climate/conversations?${params.toString()}`
+            : "/climate/conversations";
+
+        const response = await fetch(url, {
+            headers: {
+                Accept: "application/json",
+
+                "X-Requested-With": "XMLHttpRequest",
+            },
+
+            signal: requestController.signal,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            showError("Не удалось загрузить историю диалогов");
+
+            return;
+        }
+
+        conversationsCache = Array.isArray(data.conversations)
+            ? data.conversations
+            : [];
+
+        animateConversationsRender();
+    } catch (error) {
+        if (error.name === "AbortError") {
+            return;
+        }
+
+        console.error("Ошибка загрузки диалогов:", error);
+
+        showError("Ошибка загрузки истории диалогов");
+    } finally {
+        if (conversationsRequestController === requestController) {
+            conversationsRequestController = null;
+        }
+    }
+}
+
+/* =========================================================
+   УДАЛЕНИЕ ОДНОГО
    ========================================================= */
 
 export async function deleteConversation(id) {
@@ -104,7 +336,7 @@ export async function deleteConversation(id) {
             },
         });
 
-        let data = null;
+        let data = {};
 
         try {
             data = await response.json();
@@ -121,10 +353,6 @@ export async function deleteConversation(id) {
             return false;
         }
 
-        /*
-         * Если удалили диалог,
-         * который сейчас открыт.
-         */
         if (String(state.currentConversationId) === String(id)) {
             state.currentConversationId = null;
 
@@ -133,10 +361,6 @@ export async function deleteConversation(id) {
             showWelcome();
         }
 
-        /*
-         * После удаления заново
-         * загружаем историю.
-         */
         await loadConversations();
 
         return true;
@@ -148,13 +372,85 @@ export async function deleteConversation(id) {
 }
 
 /* =========================================================
-   РЕЖИМ КОРЗИНЫ
+   ОЧИСТКА ВСЕЙ ИСТОРИИ
+   ========================================================= */
+
+export async function clearConversationHistory() {
+    try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+
+        const response = await fetch("/climate/conversations", {
+            method: "DELETE",
+
+            headers: {
+                "X-CSRF-TOKEN": csrfToken?.content ?? "",
+
+                "X-Requested-With": "XMLHttpRequest",
+
+                Accept: "application/json",
+
+                "Content-Type": "application/json",
+            },
+        });
+
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch {
+            data = {};
+        }
+
+        if (!response.ok || !data.success) {
+            showError("Не удалось очистить историю диалогов");
+
+            return false;
+        }
+
+        state.currentConversationId = null;
+
+        state.isTrashMode = false;
+
+        currentSearch = "";
+
+        conversationsCache = [];
+
+        const searchInput = document.querySelector(".search");
+
+        if (searchInput) {
+            searchInput.value = "";
+        }
+
+        const binIcon = document.querySelector(".bin-icon");
+
+        if (binIcon) {
+            binIcon.style.filter = "";
+        }
+
+        clearChatMessages();
+
+        showWelcome();
+
+        animateConversationsRender();
+
+        return true;
+    } catch (error) {
+        console.error("Ошибка очистки истории:", error);
+
+        showError("Не удалось очистить историю диалогов");
+
+        return false;
+    }
+}
+
+/* =========================================================
+   РЕЖИМ УДАЛЕНИЯ
    ========================================================= */
 
 export function toggleTrashMode() {
     state.isTrashMode = !state.isTrashMode;
 
-    animateSortedConversations();
+    animateConversationsRender();
 
     const binIcon = document.querySelector(".bin-icon");
 
@@ -166,10 +462,10 @@ export function toggleTrashMode() {
 }
 
 /* =========================================================
-   АНИМАЦИЯ СОРТИРОВКИ
+   АНИМАЦИЯ
    ========================================================= */
 
-function animateSortedConversations() {
+function animateConversationsRender() {
     const scrollContainer = document.querySelector(".scroll_container");
 
     if (!scrollContainer) {
@@ -184,7 +480,9 @@ function animateSortedConversations() {
         renderSortedConversations();
 
         requestAnimationFrame(() => {
-            scrollContainer.classList.remove("is-sorting");
+            requestAnimationFrame(() => {
+                scrollContainer.classList.remove("is-sorting");
+            });
         });
     }, 180);
 }
@@ -193,11 +491,6 @@ function animateSortedConversations() {
    ДАТА
    ========================================================= */
 
-/*
- * Парсинг:
- *
- * 13.08.2026 14:35
- */
 function parseRussianDate(dateString) {
     if (!dateString) {
         return null;
@@ -250,17 +543,10 @@ function sortConversations(conversations) {
 
         const dateB = parseRussianDate(b.last_interaction_at);
 
-        /*
-         * Нет даты у обоих.
-         */
         if (!dateA && !dateB) {
             return 0;
         }
 
-        /*
-         * Диалог без даты
-         * всегда вниз.
-         */
         if (!dateA) {
             return 1;
         }
@@ -269,17 +555,10 @@ function sortConversations(conversations) {
             return -1;
         }
 
-        /*
-         * Сначала старые.
-         */
         if (currentSort === "old") {
             return dateA.getTime() - dateB.getTime();
         }
 
-        /*
-         * По умолчанию:
-         * сначала новые.
-         */
         return dateB.getTime() - dateA.getTime();
     });
 
@@ -293,41 +572,7 @@ function renderSortedConversations() {
 }
 
 /* =========================================================
-   ЗАГРУЗКА ИСТОРИИ
-   ========================================================= */
-
-export async function loadConversations() {
-    try {
-        const response = await fetch("/climate/conversations", {
-            headers: {
-                Accept: "application/json",
-
-                "X-Requested-With": "XMLHttpRequest",
-            },
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-            showError("Не удалось загрузить историю диалогов");
-
-            return;
-        }
-
-        conversationsCache = Array.isArray(data.conversations)
-            ? data.conversations
-            : [];
-
-        renderSortedConversations();
-    } catch (error) {
-        console.error("Ошибка загрузки диалогов:", error);
-
-        showError("Ошибка загрузки истории диалогов");
-    }
-}
-
-/* =========================================================
-   РЕНДЕР ИСТОРИИ
+   РЕНДЕР
    ========================================================= */
 
 function renderConversations(conversations) {
@@ -350,9 +595,7 @@ function renderConversations(conversations) {
     yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
     const todayConvs = [];
-
     const yesterdayConvs = [];
-
     const olderConvs = [];
 
     conversations.forEach((conv) => {
@@ -381,40 +624,6 @@ function renderConversations(conversations) {
 
     let html = "";
 
-    /*
-     * Режим старой корзины,
-     * если он пока остаётся
-     * в проекте.
-     */
-    if (state.isTrashMode) {
-        html += `
-            <div
-                class="trash-mode-header d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded"
-            >
-                <h5 class="mb-0 text-danger">
-                    <i class="fas fa-trash me-2"></i>
-                    Режим удаления
-                </h5>
-
-                <button
-                    type="button"
-                    class="btn btn-sm btn-outline-secondary exit-trash-mode"
-                    title="Выйти из режима удаления"
-                    style="border: none;"
-                >
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        `;
-    }
-
-    /*
-     * Сначала старые:
-     *
-     * Ранее
-     * Вчера
-     * Сегодня
-     */
     if (currentSort === "old") {
         html += renderConversationGroup("Ранее", olderConvs, "mt-2");
 
@@ -422,14 +631,6 @@ function renderConversations(conversations) {
 
         html += renderConversationGroup("Сегодня", todayConvs, "mt-3");
     } else {
-        /*
-         * Сначала новые:
-         *
-         * Сегодня
-         * Вчера
-         * Ранее
-         */
-
         html += renderConversationGroup("Сегодня", todayConvs, "mt-2");
 
         html += renderConversationGroup("Вчера", yesterdayConvs, "mt-3");
@@ -440,10 +641,8 @@ function renderConversations(conversations) {
     scrollContainer.innerHTML =
         html ||
         `
-            <p
-                class="text-muted text-center mt-3"
-            >
-                Нет диалогов
+            <p class="text-muted text-center mt-3">
+                ${currentSearch ? "Ничего не найдено" : "Нет диалогов"}
             </p>
         `;
 
@@ -451,13 +650,11 @@ function renderConversations(conversations) {
 
     bindConversationClickHandlers();
 
-    bindTrashModeHandlers();
-
     updateDeleteButtonsVisibility();
 }
 
 /* =========================================================
-   ГРУППА ДИАЛОГОВ
+   ГРУППЫ
    ========================================================= */
 
 function renderConversationGroup(title, conversations, marginClass) {
@@ -487,11 +684,6 @@ function renderConversationGroup(title, conversations, marginClass) {
 function bindConversationClickHandlers() {
     document.querySelectorAll(".conversation-item").forEach((item) => {
         item.addEventListener("click", function (event) {
-            /*
-             * Не открываем диалог,
-             * если пользователь
-             * работает с settings.
-             */
             if (
                 event.target.closest(".conversation-settings") ||
                 event.target.closest(".conversation-settings-panel")
@@ -509,9 +701,6 @@ function bindConversationClickHandlers() {
                 return;
             }
 
-            /*
-             * Уже открыт.
-             */
             if (String(state.currentConversationId) === String(id)) {
                 return;
             }
@@ -522,54 +711,7 @@ function bindConversationClickHandlers() {
 }
 
 /* =========================================================
-   СТАРЫЙ TRASH MODE
-   ========================================================= */
-
-function bindTrashModeHandlers() {
-    document.querySelectorAll(".delete-conversation").forEach((btn) => {
-        btn.addEventListener("click", function (event) {
-            event.preventDefault();
-
-            event.stopPropagation();
-
-            const id = this.dataset.id;
-
-            if (!id) {
-                return;
-            }
-
-            /*
-             * Даже старое удаление
-             * теперь идёт через
-             * наше подтверждение.
-             */
-            openDeleteConversationModal(id);
-        });
-    });
-
-    const exitBtn = document.querySelector(".exit-trash-mode");
-
-    if (exitBtn) {
-        exitBtn.addEventListener("click", function (event) {
-            event.preventDefault();
-
-            event.stopPropagation();
-
-            state.isTrashMode = false;
-
-            renderSortedConversations();
-
-            const binIcon = document.querySelector(".bin-icon");
-
-            if (binIcon) {
-                binIcon.style.filter = "";
-            }
-        });
-    }
-}
-
-/* =========================================================
-   ACTIVE CONVERSATION
+   ACTIVE
    ========================================================= */
 
 function updateActiveConversation() {
@@ -585,7 +727,7 @@ function updateActiveConversation() {
 }
 
 /* =========================================================
-   TRASH MODE VISIBILITY
+   TRASH VISIBILITY
    ========================================================= */
 
 function updateDeleteButtonsVisibility() {
@@ -598,19 +740,7 @@ function updateDeleteButtonsVisibility() {
             return;
         }
 
-        if (state.isTrashMode) {
-            if (btn.parentElement) {
-                btn.parentElement.style.display = "block";
-            }
-
-            conversationItem.classList.add("trash-mode-item");
-        } else {
-            if (btn.parentElement) {
-                btn.parentElement.style.display = "none";
-            }
-
-            conversationItem.classList.remove("trash-mode-item");
-        }
+        conversationItem.classList.toggle("trash-mode-item", state.isTrashMode);
     });
 }
 
@@ -618,20 +748,53 @@ function updateDeleteButtonsVisibility() {
    DELETE MODAL
    ========================================================= */
 
-function openDeleteConversationModal(id) {
+function openDeleteConversationModal(id = null, mode = "single") {
     const modal = document.getElementById("deleteConversationModal");
 
     if (!modal) {
-        console.error("Не найден #deleteConversationModal");
-
         return;
     }
 
-    conversationPendingDelete = id;
+    const title = document.getElementById("deleteConversationTitle");
 
-    /*
-     * Закрываем settings popover.
-     */
+    const text = modal.querySelector(".delete-modal__text");
+
+    const confirmButton = document.getElementById("confirmDeleteConversation");
+
+    deleteModalMode = mode;
+
+    if (mode === "all") {
+        conversationPendingDelete = null;
+
+        if (title) {
+            title.textContent = "Очистить историю?";
+        }
+
+        if (text) {
+            text.textContent =
+                "Вы уверены, что хотите удалить всю историю диалогов? Это действие нельзя отменить.";
+        }
+
+        if (confirmButton) {
+            confirmButton.textContent = "Да, очистить";
+        }
+    } else {
+        conversationPendingDelete = id;
+
+        if (title) {
+            title.textContent = "Удалить диалог?";
+        }
+
+        if (text) {
+            text.textContent =
+                "Вы уверены, что хотите удалить этот диалог? Это действие нельзя отменить.";
+        }
+
+        if (confirmButton) {
+            confirmButton.textContent = "Да, удалить";
+        }
+    }
+
     const openedPopover = document.querySelector(
         ".conversation-settings-panel:popover-open",
     );
@@ -640,18 +803,20 @@ function openDeleteConversationModal(id) {
         openedPopover.hidePopover();
     }
 
+    const filterPanel = document.getElementById("filterPanel");
+
+    if (filterPanel && typeof filterPanel.hidePopover === "function") {
+        filterPanel.hidePopover();
+    }
+
     modal.classList.add("is-open");
 
     modal.setAttribute("aria-hidden", "false");
 
     document.body.style.overflow = "hidden";
 
-    const confirmButton = document.getElementById("confirmDeleteConversation");
-
     if (confirmButton) {
         confirmButton.disabled = false;
-
-        confirmButton.textContent = "Да, удалить";
 
         confirmButton.focus();
     }
@@ -671,6 +836,8 @@ function closeDeleteConversationModal() {
     document.body.style.overflow = "";
 
     conversationPendingDelete = null;
+
+    deleteModalMode = null;
 }
 
 /* =========================================================
@@ -688,11 +855,25 @@ function createConversationHTML(conv) {
 
     return `
         <div
-            class="conversation-item fade_text w-100 position-relative p-2 mb-1 rounded ${state.isTrashMode ? "trash-mode-item" : ""} ${isActive ? "active" : ""}"
+            class="
+                conversation-item
+                fade_text
+                w-100
+                position-relative
+                p-2
+                mb-1
+                rounded
+                ${isActive ? "active" : ""}
+            "
             data-id="${conv.id}"
         >
+
             <div
-                class="d-flex justify-content-between align-items-start"
+                class="
+                    d-flex
+                    justify-content-between
+                    align-items-start
+                "
             >
 
                 <div
@@ -700,7 +881,11 @@ function createConversationHTML(conv) {
                 >
 
                     <p
-                        class="conversation-title fw-bold mb-1"
+                        class="
+                            conversation-title
+                            fw-bold
+                            mb-1
+                        "
                     >
                         ${escapeHtml(conv.title ?? "Без названия")}
                     </p>
@@ -710,7 +895,10 @@ function createConversationHTML(conv) {
                         conv.last_question
                             ? `
                                 <p
-                                    class="m-0 conversation-text-small"
+                                    class="
+                                        m-0
+                                        conversation-text-small
+                                    "
                                 >
                                     ${escapeHtml(conv.last_question)}
                                 </p>
@@ -723,7 +911,12 @@ function createConversationHTML(conv) {
                         conv.last_answer_preview
                             ? `
                                 <p
-                                    class="m-0 conversation-text-small text-muted fst-italic"
+                                    class="
+                                        m-0
+                                        conversation-text-small
+                                        text-muted
+                                        fst-italic
+                                    "
                                 >
                                     ${escapeHtml(conv.last_answer_preview)}...
                                 </p>
@@ -750,27 +943,39 @@ function createConversationHTML(conv) {
                     class="settings-btn"
                     data-conversation-id="${conv.id}"
                     popovertarget="${panelId}"
-                    style="anchor-name: ${anchorName};"
+                    style="
+                        anchor-name:
+                        ${anchorName};
+                    "
                     aria-label="Настройки диалога"
                 >
+
                     <img
                         class="settings_img"
                         src="/icons/dots.svg"
                         alt=""
                     >
+
                 </button>
 
 
                 <div
                     id="${panelId}"
-                    class="conversation-settings-panel"
+                    class="
+                        conversation-settings-panel
+                    "
                     popover="auto"
-                    style="position-anchor: ${anchorName};"
+                    style="
+                        position-anchor:
+                        ${anchorName};
+                    "
                 >
 
                     <button
                         type="button"
-                        class="conversation-settings-panel__item"
+                        class="
+                            conversation-settings-panel__item
+                        "
                         data-action="rename"
                         data-conversation-id="${conv.id}"
                     >
@@ -782,13 +987,15 @@ function createConversationHTML(conv) {
                         >
 
                         Переименовать
-
                     </button>
 
 
                     <button
                         type="button"
-                        class="conversation-settings-panel__item conversation-settings-panel__item--danger"
+                        class="
+                            conversation-settings-panel__item
+                            conversation-settings-panel__item--danger
+                        "
                         data-action="delete"
                         data-conversation-id="${conv.id}"
                     >
@@ -800,18 +1007,18 @@ function createConversationHTML(conv) {
                         >
 
                         Удалить
-
                     </button>
 
                 </div>
 
             </div>
+
         </div>
     `;
 }
 
 /* =========================================================
-   ИНИЦИАЛИЗАЦИЯ
+   INIT
    ========================================================= */
 
 export function initConversations() {
@@ -821,6 +1028,12 @@ export function initConversations() {
 
     const conversationSort = document.getElementById("conversationSort");
 
+    const searchInput = document.querySelector(".search");
+
+    const clearHistoryButton = document.getElementById(
+        "clearConversationHistory",
+    );
+
     const cancelDeleteButton = document.getElementById(
         "cancelDeleteConversation",
     );
@@ -829,45 +1042,92 @@ export function initConversations() {
         "confirmDeleteConversation",
     );
 
-    /*
-     * Новый диалог.
-     */
+    const renameInput = document.getElementById("renameConversationInput");
+
+    const renameCounter = document.getElementById("renameConversationCounter");
+
+    const renameError = document.getElementById("renameConversationError");
+
+    const cancelRenameButton = document.getElementById(
+        "cancelRenameConversation",
+    );
+
+    const confirmRenameButton = document.getElementById(
+        "confirmRenameConversation",
+    );
+
     if (newChatBtn) {
         newChatBtn.addEventListener("click", startNewConversation);
     }
 
-    /*
-     * Старый режим корзины.
-     */
     if (binIcon) {
         binIcon.addEventListener("click", toggleTrashMode);
     }
 
-    /*
-     * Сортировка.
-     */
     if (conversationSort) {
         currentSort = conversationSort.value || "new";
 
         conversationSort.addEventListener("change", function () {
             currentSort = this.value;
 
-            animateSortedConversations();
+            animateConversationsRender();
         });
     }
 
-    /*
-     * Settings:
-     * кнопка "Удалить".
-     *
-     * Используем делегирование,
-     * потому что элементы истории
-     * создаются заново после render.
-     */
+    if (searchInput) {
+        searchInput.addEventListener("input", function () {
+            clearTimeout(searchTimeout);
+
+            const value = this.value.trim();
+
+            searchTimeout = setTimeout(() => {
+                currentSearch = value;
+
+                loadConversations(currentSearch);
+            }, 300);
+        });
+
+        searchInput.addEventListener("search", function () {
+            clearTimeout(searchTimeout);
+
+            currentSearch = this.value.trim();
+
+            loadConversations(currentSearch);
+        });
+    }
+
+    if (clearHistoryButton) {
+        clearHistoryButton.addEventListener("click", function (event) {
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            openDeleteConversationModal(null, "all");
+        });
+    }
+
     document.addEventListener("click", function (event) {
         const target = event.target;
 
         if (!(target instanceof Element)) {
+            return;
+        }
+
+        const renameButton = target.closest('[data-action="rename"]');
+
+        if (renameButton) {
+            event.preventDefault();
+
+            event.stopPropagation();
+
+            const conversationId = renameButton.dataset.conversationId;
+
+            if (!conversationId) {
+                return;
+            }
+
+            openRenameConversationModal(conversationId);
+
             return;
         }
 
@@ -887,12 +1147,99 @@ export function initConversations() {
             return;
         }
 
-        openDeleteConversationModal(conversationId);
+        openDeleteConversationModal(conversationId, "single");
     });
 
-    /*
-     * Нет.
-     */
+    if (renameInput) {
+        renameInput.addEventListener("input", function () {
+            if (this.value.length > 30) {
+                this.value = this.value.slice(0, 30);
+            }
+
+            if (renameCounter) {
+                renameCounter.textContent = String(this.value.length);
+            }
+
+            if (renameError) {
+                renameError.textContent = "";
+            }
+        });
+
+        renameInput.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+
+                confirmRenameButton?.click();
+            }
+        });
+    }
+
+    if (cancelRenameButton) {
+        cancelRenameButton.addEventListener(
+            "click",
+            closeRenameConversationModal,
+        );
+    }
+
+    if (confirmRenameButton) {
+        confirmRenameButton.addEventListener("click", async function () {
+            if (conversationPendingRename === null) {
+                return;
+            }
+
+            const title = renameInput?.value.trim() ?? "";
+
+            if (!title) {
+                if (renameError) {
+                    renameError.textContent = "Введите название диалога.";
+                }
+
+                renameInput?.focus();
+
+                return;
+            }
+
+            if (title.length > 30) {
+                if (renameError) {
+                    renameError.textContent =
+                        "Название не должно превышать 30 символов.";
+                }
+
+                renameInput?.focus();
+
+                return;
+            }
+
+            const conversationId = conversationPendingRename;
+
+            this.disabled = true;
+
+            this.textContent = "Сохранение...";
+
+            const result = await renameConversation(conversationId, title);
+
+            if (result.success) {
+                closeRenameConversationModal();
+
+                return;
+            }
+
+            this.disabled = false;
+
+            this.textContent = "Сохранить";
+
+            if (renameError) {
+                renameError.textContent = result.message;
+            }
+        });
+    }
+
+    document
+        .querySelectorAll("[data-rename-modal-close]")
+        .forEach((element) => {
+            element.addEventListener("click", closeRenameConversationModal);
+        });
+
     if (cancelDeleteButton) {
         cancelDeleteButton.addEventListener(
             "click",
@@ -900,66 +1247,77 @@ export function initConversations() {
         );
     }
 
-    /*
-     * Да, удалить.
-     */
     if (confirmDeleteButton) {
         confirmDeleteButton.addEventListener("click", async function () {
-            if (conversationPendingDelete === null) {
-                return;
-            }
-
-            const conversationId = conversationPendingDelete;
-
-            /*
-             * Блокируем повторный клик.
-             */
             this.disabled = true;
 
-            this.textContent = "Удаление...";
+            if (deleteModalMode === "all") {
+                this.textContent = "Очистка...";
 
-            const success = await deleteConversation(conversationId);
+                const success = await clearConversationHistory();
 
-            /*
-             * Если всё успешно —
-             * закрываем окно.
-             */
-            if (success) {
-                closeDeleteConversationModal();
+                if (success) {
+                    closeDeleteConversationModal();
+
+                    return;
+                }
+
+                this.disabled = false;
+
+                this.textContent = "Да, очистить";
 
                 return;
             }
 
-            /*
-             * При ошибке оставляем
-             * окно открытым.
-             */
-            this.disabled = false;
+            if (
+                deleteModalMode === "single" &&
+                conversationPendingDelete !== null
+            ) {
+                const conversationId = conversationPendingDelete;
 
-            this.textContent = "Да, удалить";
+                this.textContent = "Удаление...";
+
+                const success = await deleteConversation(conversationId);
+
+                if (success) {
+                    closeDeleteConversationModal();
+
+                    return;
+                }
+
+                this.disabled = false;
+
+                this.textContent = "Да, удалить";
+
+                return;
+            }
+
+            this.disabled = false;
         });
     }
 
-    /*
-     * Клик на затемнение.
-     */
     document
         .querySelectorAll("[data-delete-modal-close]")
         .forEach((element) => {
             element.addEventListener("click", closeDeleteConversationModal);
         });
 
-    /*
-     * Escape.
-     */
     document.addEventListener("keydown", function (event) {
         if (event.key !== "Escape") {
             return;
         }
 
-        const modal = document.getElementById("deleteConversationModal");
+        const renameModal = document.getElementById("renameConversationModal");
 
-        if (modal?.classList.contains("is-open")) {
+        if (renameModal?.classList.contains("is-open")) {
+            closeRenameConversationModal();
+
+            return;
+        }
+
+        const deleteModal = document.getElementById("deleteConversationModal");
+
+        if (deleteModal?.classList.contains("is-open")) {
             closeDeleteConversationModal();
         }
     });

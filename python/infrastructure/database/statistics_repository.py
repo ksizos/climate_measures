@@ -27,6 +27,7 @@ def get_statistics_metadata(
         indicators_df = pd.read_sql_query(
             """
             SELECT
+                i.id AS indicator_id,
                 i.name AS indicator_name,
                 s.name AS section_name,
                 u.name AS unit_name,
@@ -46,6 +47,7 @@ def get_statistics_metadata(
         territories_df = pd.read_sql_query(
             """
             SELECT
+                t.id AS territory_id,
                 t.name AS territory_name,
                 COALESCE(tt.name, '') AS territory_type
             FROM territory t
@@ -112,43 +114,92 @@ def clear_statistics_metadata_cache() -> None:
 
 def get_indicators_for_territories(
     territory_names: list[str],
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> pd.DataFrame:
-    if not territory_names:
-        metadata = get_statistics_metadata(
-            statistics_cache_key()
-        )
-
-        return metadata["indicators"].copy()
 
     connection = create_db_connection()
 
     try:
-        sql = """
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        if territory_names:
+            conditions.append(
+                "t.name = ANY(%s)"
+            )
+
+            params.append(
+                territory_names
+            )
+
+        if date_from:
+            conditions.append(
+                "p.end_date >= %s"
+            )
+
+            params.append(
+                date_from
+            )
+
+        if date_to:
+            conditions.append(
+                "p.start_date <= %s"
+            )
+
+            params.append(
+                date_to
+            )
+
+        where_sql = ""
+
+        if conditions:
+            where_sql = (
+                "WHERE "
+                + " AND ".join(
+                    conditions
+                )
+            )
+
+        sql = f"""
             SELECT DISTINCT
+                i.id AS indicator_id,
                 i.name AS indicator_name,
                 s.name AS section_name,
                 u.name AS unit_name,
-                COALESCE(ind.name, '') AS industry_name,
-                t.name AS territory_name
-                FROM statistic st
-                JOIN territory t
-                    ON t.id = st.territory_id
-                JOIN indicator i
-                    ON i.id = st.indicator_id
-                JOIN section s
-                    ON s.id = i.section_id
-                JOIN unit u
-                    ON u.id = i.unit_id
-                LEFT JOIN industry ind
-                    ON ind.id = s.industry_id
-            WHERE t.name = ANY(%s)
+                COALESCE(
+                    ind.name,
+                    ''
+                ) AS industry_name
+            FROM statistic st
+
+            JOIN territory t
+                ON t.id = st.territory_id
+
+            JOIN indicator i
+                ON i.id = st.indicator_id
+
+            JOIN section s
+                ON s.id = i.section_id
+
+            JOIN unit u
+                ON u.id = i.unit_id
+
+            LEFT JOIN industry ind
+                ON ind.id = s.industry_id
+
+            JOIN period p
+                ON p.id = st.period_id
+
+            {where_sql}
+
             ORDER BY i.name
         """
 
         return pd.read_sql_query(
             sql,
             connection,
-            params=(territory_names,),
+            params=tuple(params),
         )
 
     finally:

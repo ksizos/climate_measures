@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from infrastructure.llm.local_yandex import (
+from infrastructure.llm.provider import (
     chat_text,
 )
 

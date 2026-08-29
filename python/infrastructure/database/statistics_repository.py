@@ -206,6 +206,40 @@ def get_indicators_for_territories(
         connection.close()
 
 
+def get_indicator_units(
+    indicator_ids: list[int],
+) -> dict[int, str]:
+    if not indicator_ids:
+        return {}
+
+    connection = create_db_connection()
+
+    try:
+        dataframe = pd.read_sql_query(
+            """
+            SELECT
+                i.id AS indicator_id,
+                u.name AS unit_name
+            FROM indicator i
+            JOIN unit u
+                ON u.id = i.unit_id
+            WHERE i.id = ANY(%s)
+            """,
+            connection,
+            params=(indicator_ids,),
+        )
+
+        return {
+            int(row["indicator_id"]):
+                str(row["unit_name"])
+            for _, row
+            in dataframe.iterrows()
+        }
+
+    finally:
+        connection.close()
+
+
 def execute_statistics_sql(
     sql: str,
 ) -> pd.DataFrame:

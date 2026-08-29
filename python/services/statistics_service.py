@@ -24,6 +24,7 @@ from infrastructure.llm.provider import (
 from infrastructure.database.statistics_repository import (
     execute_statistics_sql,
     get_statistics_metadata,
+    get_indicator_units,
 )
 
 from services.statistics_cache import (
@@ -49,7 +50,21 @@ def extract_requested_years(
         )
     )
 
+def extract_indicator_ids_from_sql(
+    sql: str,
+) -> list[int]:
+    matches = re.findall(
+        r"\bindicator\.id\s*=\s*(\d+)",
+        sql,
+        flags=re.IGNORECASE,
+    )
 
+    return list(
+        dict.fromkeys(
+            int(value)
+            for value in matches
+        )
+    )
 
 def generate_statistics_query_plan(
     user_question: str,
@@ -113,6 +128,7 @@ def generate_statistics_query_plan(
             "territory_query": None,
             "date_from": None,
             "date_to": None,
+            "requested_unit": None,
             "calculation": user_question,
         }
 
@@ -137,6 +153,19 @@ def generate_statistics_query_plan(
             user_question
         ]
 
+    requested_unit = plan.get(
+        "requested_unit"
+    )
+
+    if requested_unit is not None:
+        requested_unit = str(
+            requested_unit
+        ).strip()
+
+        if not requested_unit:
+            requested_unit = None
+
+
     result = {
         "indicator_queries":
             indicator_queries,
@@ -155,6 +184,9 @@ def generate_statistics_query_plan(
             plan.get(
                 "date_to"
             ),
+
+        "requested_unit":
+            requested_unit,
 
         "calculation":
             str(
@@ -214,6 +246,12 @@ def format_statistics_context(
 
     date_to = query_plan.get(
         "date_to"
+    )
+
+    requested_unit = (
+        query_plan.get(
+            "requested_unit"
+        )
     )
 
     calculation = str(
@@ -294,6 +332,10 @@ def format_statistics_context(
             f"{date_to or 'не указано'}"
         ),
         (
+            "- Единица, запрошенная пользователем: "
+            f"{requested_unit or 'не указана'}"
+        ),
+        (
             "- Требуемый расчёт или анализ: "
             f"{calculation or 'получить значение показателя'}"
         ),
@@ -331,7 +373,7 @@ def format_statistics_context(
                 f"{row.get('indicator_id', '')} | "
                 f"name = "
                 f"{row.get('indicator_name', '')} | "
-                f"unit = "
+                f"source_unit = "
                 f"{row.get('unit_name', '')} | "
                 f"section = "
                 f"{row.get('section_name', '')} | "
@@ -611,20 +653,13 @@ def format_statistics_context(
 
 def generate_statistics_sql(
     user_question: str,
+    query_plan: dict,
     conversation_history: str | None = None,
 ) -> str:
-    query_plan = (
-        generate_statistics_query_plan(
-            user_question,
-            conversation_history=(
-                conversation_history
-            ),
-        )
-    )
 
     context = format_statistics_context(
-        user_question,
-        query_plan,
+        user_question=user_question,
+        query_plan=query_plan,
     )
 
     history_block = ""
@@ -679,22 +714,70 @@ def generate_statistics_answer(
     user_question: str,
     sql: str,
     dataframe: pd.DataFrame,
+    query_plan: dict,
 ) -> str:
     rows_text = dataframe_to_llm_rows(
         dataframe
+    )
+    requested_unit = (
+        query_plan.get(
+            "requested_unit"
+        )
+    )
+
+    requested_unit_text = (
+        str(requested_unit)
+        if requested_unit
+        else "не указана"
+    )
+
+    source_units: list[str] = []
+
+    if (
+        not dataframe.empty
+        and "Единица измерения"
+        in dataframe.columns
+    ):
+        source_units = (
+            dataframe[
+                "Единица измерения"
+            ]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+
+    source_units_text = (
+        ", ".join(source_units)
+        if source_units
+        else "не указана в результате SQL"
     )
 
     user_prompt = (
         "Описание структуры БД:\n"
         f"{STATISTICS_SCHEMA_DESCRIPTION}\n\n"
 
-        "Запрос пользователя:\n"
+        "Исходный запрос пользователя:\n"
         f"{user_question}\n\n"
+
+        "Разобранный план запроса:\n"
+        f"{json.dumps(
+            query_plan,
+            ensure_ascii=False,
+            indent=2,
+        )}\n\n"
+
+        "Единица измерения, которую запросил пользователь:\n"
+        f"{requested_unit_text}\n\n"
+
+        "Исходная единица измерения результата из БД:\n"
+        f"{source_units_text}\n\n"
 
         "Выполненный SQL-запрос:\n"
         f"{sql}\n\n"
 
-        "Полученные результаты:\n"
+        "Полученные из PostgreSQL результаты:\n"
         f"{rows_text}"
     )
 
@@ -713,9 +796,21 @@ def generate_statistics_response(
     conversation_history: str | None = None,
 ) -> str:
     try:
+        query_plan = (
+            generate_statistics_query_plan(
+                user_question,
+                conversation_history=(
+                    conversation_history
+                ),
+            )
+        )
+
         sql = generate_statistics_sql(
             user_question,
-            conversation_history=conversation_history,
+            query_plan=query_plan,
+            conversation_history=(
+                conversation_history
+            ),
         )
 
         logger.info(
@@ -723,17 +818,76 @@ def generate_statistics_response(
             sql,
         )
 
-        dataframe = execute_statistics_sql(sql)
+        dataframe = execute_statistics_sql(
+            sql
+        )
+
+        if (
+            not dataframe.empty
+            and "Единица измерения"
+            not in dataframe.columns
+        ):
+            indicator_ids = (
+                extract_indicator_ids_from_sql(
+                    sql
+                )
+            )
+
+            indicator_units = (
+                get_indicator_units(
+                    indicator_ids
+                )
+            )
+
+            unique_units = set(
+                indicator_units.values()
+            )
+
+            if len(unique_units) == 1:
+                dataframe[
+                    "Единица измерения"
+                ] = next(
+                    iter(unique_units)
+                )
+
+                logger.info(
+                    "Единица измерения восстановлена "
+                    "по indicator.id: %s",
+                    next(iter(unique_units)),
+                )
 
         logger.info(
             "Получено строк статистики: %s",
             len(dataframe),
         )
 
+        logger.info(
+        "Requested unit: %s",
+        query_plan.get(
+            "requested_unit"
+            ),
+        )
+
+        if (
+            "Единица измерения"
+            in dataframe.columns
+        ):
+            logger.info(
+                "Source units from SQL: %s",
+                dataframe[
+                    "Единица измерения"
+                ]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist(),
+            )
+
         return generate_statistics_answer(
-            user_question,
-            sql,
-            dataframe,
+            user_question=user_question,
+            sql=sql,
+            dataframe=dataframe,
+            query_plan=query_plan,
         )
 
     except Exception as error:

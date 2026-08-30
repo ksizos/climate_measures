@@ -71,7 +71,7 @@ METHOD_DOCS_SYSTEM_PROMPT = """
   и официальный источник.
 
 - Внутренние технические обозначения
-  METHOD-DOC, CONTENT
+  METHOD-DOC, CONTENT, LOCAL, WEB 
   и подобные
   никогда не показывай пользователю.
 

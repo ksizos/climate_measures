@@ -193,6 +193,7 @@
     display: flex;
     flex-direction: column !important;
     min-width: 0;
+    overflow: visible;
 }
 
 .markdown-content table {
@@ -202,14 +203,20 @@
     font-size: 0.875rem;
 }
 
+/*
+ * Не разрешаем тексту таблицы
+ * произвольно ломаться внутри слов.
+ */
 .markdown-content th,
 .markdown-content td {
     border: 1px solid #dee2e6;
     padding: 0.75rem;
     text-align: left;
     vertical-align: top;
-}
 
+    word-break: normal;
+    overflow-wrap: normal;
+}
 .markdown-content th {
     background-color: #f8f9fa;
     font-weight: 600;
@@ -461,9 +468,11 @@
 
 @media (max-width: 480px) {
     .welcome-message {
-        padding: 68px 12px 105px;
-        justify-content: center;
+        height: 100%;
+        padding: 100px 12px 130px;
+        justify-content: flex-start;
         overflow-y: auto;
+        box-sizing: border-box;
     }
 
     .welcome_header {

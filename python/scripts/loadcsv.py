@@ -72,7 +72,7 @@ def load_csv_to_postgres(csv_path: str, table_name: str = "climate_cases"):
 
 
 if __name__ == "__main__":
-    csv_path = "data/Адапт меро.xlsx"
+    csv_path = "data/Адапт_меро.xlsx"
     if os.path.exists(csv_path):
         load_csv_to_postgres(csv_path)
     else:

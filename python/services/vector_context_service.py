@@ -8,6 +8,11 @@ from infrastructure.vector_store.pgvector import (
     load_vector_index,
 )
 
+from llama_index.core.vector_stores import (
+    MetadataFilter,
+    MetadataFilters,
+)
+
 logger = logging.getLogger(__name__)
 
 LOCAL_SOURCE_URL_KEYS = (
@@ -223,40 +228,66 @@ def retrieve_vector_context(
     table_name: str,
     top_k: int = 4,
     min_score: float | None = None,
+    metadata_filters: (
+        dict[str, Any]
+        | None
+    ) = None,
 ) -> VectorContextResult:
     """
-    Выполняет semantic search в конкретной
-    PGVector-таблице.
+    Выполняет semantic search
+    в конкретной PGVector-таблице.
 
-    Примеры table_name:
-    - NPA_TABLE;
-    - METHOD_DOCS_TABLE;
-    - INTERNET_RESOURCES_TABLE.
+    metadata_filters позволяет
+    ограничить поиск по metadata.
+
+    Пример:
+
+    {
+        "record_type": "catalog"
+    }
+
+    или:
+
+    {
+        "record_type": "content",
+        "document_id": 5
+    }
     """
 
     clean_query = query.strip()
 
     if not clean_query:
         raise ValueError(
-            "Векторный запрос не может быть пустым."
+            "Векторный запрос "
+            "не может быть пустым."
         )
 
-    if not table_name or not table_name.strip():
+    if (
+        not table_name
+        or not table_name.strip()
+    ):
         raise ValueError(
-            "Не указано имя PGVector-таблицы."
+            "Не указано имя "
+            "PGVector-таблицы."
         )
 
     if top_k <= 0:
         raise ValueError(
-            "top_k должен быть больше нуля."
+            "top_k должен "
+            "быть больше нуля."
         )
 
     logger.info(
         "Vector retrieval START: "
-        "table=%s, top_k=%s, min_score=%s, query=%s",
+        "table=%s, "
+        "top_k=%s, "
+        "min_score=%s, "
+        "filters=%s, "
+        "query=%s",
         table_name,
         top_k,
         min_score,
+        metadata_filters,
         clean_query[:300],
     )
 
@@ -264,8 +295,38 @@ def retrieve_vector_context(
         table_name=table_name,
     )
 
+    retriever_kwargs: dict[
+        str,
+        Any,
+    ] = {
+        "similarity_top_k":
+            top_k,
+    }
+
+    # -------------------------------------
+    # Metadata filtering
+    # -------------------------------------
+
+    if metadata_filters:
+
+        filters = MetadataFilters(
+            filters=[
+                MetadataFilter(
+                    key=key,
+                    value=value,
+                )
+                for key, value
+                in metadata_filters.items()
+                if value is not None
+            ]
+        )
+
+        retriever_kwargs[
+            "filters"
+        ] = filters
+
     retriever = index.as_retriever(
-        similarity_top_k=top_k,
+        **retriever_kwargs
     )
 
     nodes = retriever.retrieve(
@@ -277,7 +338,12 @@ def retrieve_vector_context(
     ] = []
 
     for node in nodes:
-        text = node.get_content().strip()
+
+        text = (
+            node
+            .get_content()
+            .strip()
+        )
 
         if not text:
             continue
@@ -320,9 +386,12 @@ def retrieve_vector_context(
 
     logger.info(
         "Vector retrieval FINISHED: "
-        "table=%s, documents=%s",
+        "table=%s, "
+        "documents=%s, "
+        "filters=%s",
         table_name,
         len(documents),
+        metadata_filters,
     )
 
     return VectorContextResult(

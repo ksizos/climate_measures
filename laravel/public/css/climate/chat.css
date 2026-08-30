@@ -469,7 +469,7 @@
 @media (max-width: 480px) {
     .welcome-message {
         height: 100%;
-        padding: 100px 12px 130px;
+        padding: 40px 12px 130px;
         justify-content: flex-start;
         overflow-y: auto;
         box-sizing: border-box;

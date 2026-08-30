@@ -67,6 +67,15 @@ NPA_DOCUMENTS_DIR = (
     / "npa_documents"
 )
 
+METHOD_CATALOG_FILE = (
+    DATA_DIR
+    / "METHOD_TABLE.xlsx"
+)
+
+METHOD_DOCUMENTS_DIR = (
+    DATA_DIR
+    / "method_documents"
+)
 
 # =====================================================
 # HELPERS
@@ -1239,6 +1248,571 @@ def create_npa_vector_index():
 
 
 # =====================================================
+# METHOD DOCUMENTS
+# =====================================================
+
+METHOD_REQUIRED_COLUMNS = {
+    "id",
+    "Дата",
+    "Форма",
+    "Название",
+    "ссылка",
+    "input_file",
+}
+
+
+def validate_method_dataframe(
+    df: pd.DataFrame,
+) -> None:
+
+    missing = (
+        METHOD_REQUIRED_COLUMNS
+        - set(df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "В METHOD_TABLE.xlsx "
+            "отсутствуют колонки: "
+            + ", ".join(
+                sorted(missing)
+            )
+        )
+
+    if df["id"].isna().any():
+        raise ValueError(
+            "В METHOD_TABLE.xlsx "
+            "есть строки с пустым id."
+        )
+
+    normalized_ids = [
+        str(
+            normalize_document_id(
+                value
+            )
+        )
+        for value
+        in df["id"].tolist()
+    ]
+
+    if (
+        len(normalized_ids)
+        != len(set(normalized_ids))
+    ):
+        raise ValueError(
+            "В METHOD_TABLE.xlsx "
+            "id документов должны "
+            "быть уникальными."
+        )
+
+
+def method_common_metadata(
+    row: pd.Series,
+) -> dict[str, Any]:
+
+    method_id = str(
+        normalize_document_id(
+            row["id"]
+        )
+    )
+
+    metadata = {
+        "knowledge_type":
+            "method",
+
+        "method_id":
+            method_id,
+
+        "title":
+            cell_to_text(
+                row["Название"]
+            ),
+
+        "form":
+            cell_to_text(
+                row["Форма"]
+            ),
+
+        "date":
+            cell_to_text(
+                row["Дата"]
+            ),
+
+        "url":
+            cell_to_text(
+                row["ссылка"]
+            ),
+
+        "input_file":
+            cell_to_text(
+                row["input_file"]
+            ),
+    }
+
+    return compact_metadata(
+        metadata
+    )
+
+
+def create_method_catalog_documents(
+    df: pd.DataFrame,
+) -> list[Document]:
+
+    documents: list[Document] = []
+
+    for row_index, row in (
+        df.iterrows()
+    ):
+
+        metadata = (
+            method_common_metadata(
+                row
+            )
+        )
+
+        metadata.update(
+            {
+                "record_type":
+                    "catalog",
+
+                "source":
+                    METHOD_CATALOG_FILE.name,
+
+                "row_index":
+                    int(row_index),
+
+                "file_type":
+                    "excel",
+            }
+        )
+
+        text_parts = [
+            (
+                "Форма документа: "
+                + cell_to_text(
+                    row["Форма"]
+                )
+            ),
+            (
+                "Дата: "
+                + cell_to_text(
+                    row["Дата"]
+                )
+            ),
+            (
+                "Название: "
+                + cell_to_text(
+                    row["Название"]
+                )
+            ),
+        ]
+
+        text = "\n".join(
+            value
+            for value
+            in text_parts
+            if not value.endswith(": ")
+        )
+
+        documents.append(
+            Document(
+                text=text,
+                metadata=metadata,
+            )
+        )
+
+    return documents
+
+
+def create_method_content_documents(
+    df: pd.DataFrame,
+) -> list[Document]:
+
+    documents: list[Document] = []
+
+    METHOD_DOCUMENTS_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    for _, row in df.iterrows():
+
+        metadata_base = (
+            method_common_metadata(
+                row
+            )
+        )
+
+        method_id = (
+            metadata_base[
+                "method_id"
+            ]
+        )
+
+        input_file = (
+            metadata_base.get(
+                "input_file",
+                "",
+            )
+        )
+
+        if not input_file:
+            print(
+                "WARNING: "
+                f"METHOD id={method_id}: "
+                "input_file не указан. "
+                "Будет создана только "
+                "catalog-запись."
+            )
+            continue
+
+        file_path = Path(
+            input_file
+        )
+
+        if not file_path.is_absolute():
+            file_path = (
+                METHOD_DOCUMENTS_DIR
+                / file_path
+            )
+
+        file_path = (
+            file_path.resolve()
+        )
+
+        if not file_path.exists():
+            print(
+                "WARNING: "
+                f"METHOD id={method_id}: "
+                "файл не найден: "
+                f"{file_path}"
+            )
+            continue
+
+        if (
+            file_path.suffix.lower()
+            not in SUPPORTED_NPA_EXTENSIONS
+        ):
+            print(
+                "WARNING: "
+                f"METHOD id={method_id}: "
+                "неподдерживаемый формат: "
+                f"{file_path.suffix}"
+            )
+            continue
+
+        print(
+            "\nREAD METHOD CONTENT:"
+        )
+
+        print(
+            f"  id={method_id}"
+        )
+
+        print(
+            f"  file={file_path.name}"
+        )
+
+        try:
+            loaded_documents = (
+                SimpleDirectoryReader(
+                    input_files=[
+                        str(file_path)
+                    ],
+                    raise_on_error=True,
+                )
+                .load_data()
+            )
+
+        except Exception as exc:
+            print(
+                "WARNING: "
+                "не удалось прочитать "
+                f"{file_path.name}: "
+                f"{exc}"
+            )
+            continue
+
+        added_parts = 0
+
+        for part_index, loaded in (
+            enumerate(
+                loaded_documents,
+                start=1,
+            )
+        ):
+
+            text = (
+                loaded.text
+                or ""
+            ).strip()
+
+            if not text:
+                continue
+
+            metadata = dict(
+                metadata_base
+            )
+
+            metadata.update(
+                {
+                    "record_type":
+                        "content",
+
+                    "source":
+                        file_path.name,
+
+                    "file_type":
+                        file_path
+                        .suffix
+                        .lower()
+                        .lstrip("."),
+
+                    "content_part":
+                        part_index,
+                }
+            )
+
+            loaded_metadata = (
+                getattr(
+                    loaded,
+                    "metadata",
+                    {},
+                )
+                or {}
+            )
+
+            for key in (
+                "page_label",
+                "page_number",
+            ):
+                if (
+                    key
+                    not in loaded_metadata
+                ):
+                    continue
+
+                value = (
+                    loaded_metadata[key]
+                )
+
+                if value is not None:
+                    metadata[key] = value
+
+            documents.append(
+                Document(
+                    text=text,
+                    metadata=(
+                        compact_metadata(
+                            metadata
+                        )
+                    ),
+                )
+            )
+
+            added_parts += 1
+
+        print(
+            "  extracted parts:",
+            added_parts,
+        )
+
+        if added_parts == 0:
+            print(
+                "WARNING: "
+                f"{file_path.name} "
+                "прочитан, но текст "
+                "не извлечён. "
+                "Возможно, это скан."
+            )
+
+    return documents
+
+
+def create_method_nodes(
+    catalog_documents:
+        list[Document],
+
+    content_documents:
+        list[Document],
+):
+
+    nodes = []
+
+    # -----------------------------------------
+    # CATALOG
+    # -----------------------------------------
+
+    for document in (
+        catalog_documents
+    ):
+
+        method_id = (
+            document.metadata[
+                "method_id"
+            ]
+        )
+
+        node = TextNode(
+            id_=(
+                f"method-catalog-"
+                f"{method_id}"
+            ),
+
+            text=document.text,
+
+            metadata=(
+                document.metadata
+            ),
+        )
+
+        nodes.append(
+            node
+        )
+
+    # -----------------------------------------
+    # CONTENT
+    # -----------------------------------------
+
+    splitter = SentenceSplitter(
+        chunk_size=1000,
+        chunk_overlap=120,
+    )
+
+    content_nodes = (
+        splitter
+        .get_nodes_from_documents(
+            content_documents
+        )
+    )
+
+    chunk_counters: dict[
+        str,
+        int,
+    ] = {}
+
+    for node in content_nodes:
+
+        method_id = (
+            node.metadata.get(
+                "method_id"
+            )
+        )
+
+        key = str(
+            method_id
+        )
+
+        chunk_index = (
+            chunk_counters.get(
+                key,
+                0,
+            )
+        )
+
+        node.metadata[
+            "chunk_index"
+        ] = chunk_index
+
+        node.id_ = (
+            f"method-content-"
+            f"{key}-"
+            f"{chunk_index}"
+        )
+
+        chunk_counters[key] = (
+            chunk_index
+            + 1
+        )
+
+        nodes.append(
+            node
+        )
+
+    print(
+        "\nMETHOD catalog nodes:",
+        len(catalog_documents),
+    )
+
+    print(
+        "METHOD content nodes:",
+        len(content_nodes),
+    )
+
+    print(
+        "METHOD total nodes:",
+        len(nodes),
+    )
+
+    return nodes
+
+
+def create_method_vector_index():
+
+    print(
+        "\n###################################"
+    )
+
+    print(
+        "# BUILD METHOD EMBEDDINGS"
+    )
+
+    print(
+        "###################################"
+    )
+
+    if not (
+        METHOD_CATALOG_FILE.exists()
+    ):
+        raise FileNotFoundError(
+            "METHOD_TABLE.xlsx "
+            "не найден: "
+            f"{METHOD_CATALOG_FILE}"
+        )
+
+    df = pd.read_excel(
+        METHOD_CATALOG_FILE
+    )
+
+    validate_method_dataframe(
+        df
+    )
+
+    catalog_documents = (
+        create_method_catalog_documents(
+            df
+        )
+    )
+
+    content_documents = (
+        create_method_content_documents(
+            df
+        )
+    )
+
+    print(
+        "\nMETHOD catalog documents:",
+        len(catalog_documents),
+    )
+
+    print(
+        "METHOD content source parts:",
+        len(content_documents),
+    )
+
+    nodes = (
+        create_method_nodes(
+            catalog_documents,
+            content_documents,
+        )
+    )
+
+    return create_index_from_nodes(
+        nodes=nodes,
+        table_name=METHOD_DOCS_TABLE,
+    )
+
+# =====================================================
 # BUILD TARGETS
 # =====================================================
 
@@ -1246,29 +1820,22 @@ def build_npa_index():
     create_npa_vector_index()
 
 
+def build_method_index():
+    create_method_vector_index()
+
+
 def build_all_indexes():
 
+    print(
+        "BUILD NPA EMBEDDINGS"
+    )
     create_npa_vector_index()
 
     print(
-        "\n###################################"
-    )
-    print(
-        "# BUILD METHOD EMBEDDINGS"
-    )
-    print(
-        "###################################"
+        "BUILD METHOD EMBEDDINGS"
     )
 
-    create_vector_index(
-        files=[
-            DATA_DIR
-            / "METHOD_TABLE.xlsx"
-        ],
-        table_name=(
-            METHOD_DOCS_TABLE
-        ),
-    )
+    create_method_vector_index()
 
     print(
         "\n###################################"
@@ -1350,6 +1917,7 @@ if __name__ == "__main__":
         nargs="?",
         choices=[
             "npa",
+            "method",
             "all",
         ],
         default="npa",
@@ -1366,5 +1934,7 @@ if __name__ == "__main__":
 
     if args.target == "npa":
         build_npa_index()
+    elif args.target == "method":
+        build_method_index()
     else:
         build_all_indexes()

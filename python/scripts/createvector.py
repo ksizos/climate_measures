@@ -77,6 +77,16 @@ METHOD_DOCUMENTS_DIR = (
     / "method_documents"
 )
 
+ADAPTATION_REGISTRY_FILE = (
+    DATA_DIR
+    / "Реестр_адапт_мер.xlsx"
+)
+
+ADAPTATION_CASES_FILE = (
+    DATA_DIR
+    / "Реестр_адапт_мер3.xlsx"
+)
+
 # =====================================================
 # HELPERS
 # =====================================================
@@ -1812,6 +1822,615 @@ def create_method_vector_index():
         table_name=METHOD_DOCS_TABLE,
     )
 
+
+# =====================================================
+# ADAPTATION
+# =====================================================
+
+
+ADAPTATION_REGISTRY_REQUIRED_COLUMNS = {
+    "Адаптационная потребность",
+    "Мероприятие",
+    "Категория мероприятия",
+    "Характер мероприятия (постоянное/дополнительное)",
+    "Влияние",
+    "Показатель достижения целей адаптации (целевой показатель)",
+    "Источник финансирования",
+    "Источник",
+}
+
+
+ADAPTATION_CASE_REQUIRED_COLUMNS = {
+    "Проблема",
+    "Наименование мероприятий",
+    "Митигационный эффект",
+    "Адаптационный эффект",
+    "Наименование района",
+    "Агроклиматические условия района",
+    "Ответственная организация",
+    "Источник",
+}
+
+
+def normalize_excel_columns(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Убирает случайные пробелы
+    в начале и конце названий колонок.
+    """
+
+    result = df.copy()
+
+    result.columns = [
+        str(column).strip()
+        for column
+        in result.columns
+    ]
+
+    return result
+
+
+def is_http_url(
+    value: str,
+) -> bool:
+    value = value.strip().lower()
+
+    return (
+        value.startswith("http://")
+        or value.startswith("https://")
+    )
+
+
+def validate_adaptation_registry(
+    df: pd.DataFrame,
+) -> None:
+
+    missing = (
+        ADAPTATION_REGISTRY_REQUIRED_COLUMNS
+        - set(df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "В Реестр_адапт_мер.xlsx "
+            "отсутствуют колонки: "
+            + ", ".join(
+                sorted(missing)
+            )
+        )
+
+    if df.empty:
+        raise ValueError(
+            "Реестр_адапт_мер.xlsx пуст."
+        )
+
+def validate_adaptation_cases(
+    df: pd.DataFrame,
+) -> None:
+
+    missing = (
+        ADAPTATION_CASE_REQUIRED_COLUMNS
+        - set(df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "В Реестр_адапт_мер3.xlsx "
+            "отсутствуют колонки: "
+            + ", ".join(
+                sorted(missing)
+            )
+        )
+
+    if df.empty:
+        raise ValueError(
+            "Реестр_адапт_мер3.xlsx пуст."
+        )
+
+
+def create_adaptation_registry_nodes(
+    df: pd.DataFrame,
+) -> list[TextNode]:
+
+    nodes: list[TextNode] = []
+
+    for row_index, row in (
+        df.iterrows()
+    ):
+
+        adaptation_need = (
+            cell_to_text(
+                row[
+                    "Адаптационная потребность"
+                ]
+            )
+        )
+
+        measure = (
+            cell_to_text(
+                row["Мероприятие"]
+            )
+        )
+
+        category = (
+            cell_to_text(
+                row[
+                    "Категория мероприятия"
+                ]
+            )
+        )
+
+        measure_nature = (
+            cell_to_text(
+                row[
+                    "Характер мероприятия "
+                    "(постоянное/дополнительное)"
+                ]
+            )
+        )
+
+        impact_type = (
+            cell_to_text(
+                row["Влияние"]
+            )
+        )
+
+        target_indicator = (
+            cell_to_text(
+                row[
+                    "Показатель достижения "
+                    "целей адаптации "
+                    "(целевой показатель)"
+                ]
+            )
+        )
+
+        funding_source = (
+            cell_to_text(
+                row[
+                    "Источник финансирования"
+                ]
+            )
+        )
+
+        source_reference = (
+            cell_to_text(
+                row["Источник"]
+            )
+        )
+
+        if not measure:
+            continue
+
+        # -------------------------------------
+        # Текст, по которому строится embedding
+        # -------------------------------------
+
+        text_parts = [
+            (
+                "Адаптационная потребность: "
+                f"{adaptation_need}"
+            ),
+            (
+                "Мероприятие: "
+                f"{measure}"
+            ),
+        ]
+
+        if category:
+            text_parts.append(
+                "Категория мероприятия: "
+                f"{category}"
+            )
+
+        if measure_nature:
+            text_parts.append(
+                "Характер мероприятия: "
+                f"{measure_nature}"
+            )
+
+        if impact_type:
+            text_parts.append(
+                "Влияние мероприятия: "
+                f"{impact_type}"
+            )
+
+        if target_indicator:
+            text_parts.append(
+                "Целевой показатель: "
+                f"{target_indicator}"
+            )
+
+        embed_text = "\n".join(
+            text_parts
+        )
+
+        # -------------------------------------
+        # Metadata
+        # -------------------------------------
+
+        measure_id = (
+            f"registry-{row_index + 1}"
+        )
+
+        metadata = {
+            "knowledge_type":
+                "adaptation",
+
+            "source_type":
+                "registry",
+
+            "measure_id":
+                measure_id,
+
+            "title":
+                measure,
+
+            "adaptation_need":
+                adaptation_need,
+
+            "category":
+                category,
+
+            "measure_nature":
+                measure_nature,
+
+            "impact_type":
+                impact_type,
+
+            "target_indicator":
+                target_indicator,
+
+            "funding_source":
+                funding_source,
+
+            "source_reference":
+                source_reference,
+
+            "source_file":
+                ADAPTATION_REGISTRY_FILE.name,
+
+            "row_index":
+                str(row_index),
+        }
+
+        # Если Источник является настоящим URL,
+        # дополнительно сохраняем его как url.
+        if (
+            source_reference
+            and is_http_url(
+                source_reference
+            )
+        ):
+            metadata[
+                "url"
+            ] = source_reference
+
+        metadata = (
+            compact_metadata(
+                metadata
+            )
+        )
+
+        node = TextNode(
+            id_=(
+                "adaptation-registry-"
+                f"{row_index + 1}"
+            ),
+
+            text=embed_text,
+
+            metadata=metadata,
+        )
+
+        nodes.append(
+            node
+        )
+
+    print(
+        "ADAPTATION registry nodes:",
+        len(nodes),
+    )
+
+    return nodes
+
+
+def create_adaptation_case_nodes(
+    df: pd.DataFrame,
+) -> list[TextNode]:
+
+    nodes: list[TextNode] = []
+
+    for row_index, row in (
+        df.iterrows()
+    ):
+
+        problem = (
+            cell_to_text(
+                row["Проблема"]
+            )
+        )
+
+        measure = (
+            cell_to_text(
+                row[
+                    "Наименование мероприятий"
+                ]
+            )
+        )
+
+        mitigation = (
+            cell_to_text(
+                row[
+                    "Митигационный эффект"
+                ]
+            )
+        )
+
+        adaptation_effect = (
+            cell_to_text(
+                row[
+                    "Адаптационный эффект"
+                ]
+            )
+        )
+
+        district = (
+            cell_to_text(
+                row[
+                    "Наименование района"
+                ]
+            )
+        )
+
+        climate_conditions = (
+            cell_to_text(
+                row[
+                    "Агроклиматические "
+                    "условия района"
+                ]
+            )
+        )
+
+        responsible_org = (
+            cell_to_text(
+                row[
+                    "Ответственная организация"
+                ]
+            )
+        )
+
+        source_url = (
+            cell_to_text(
+                row["Источник"]
+            )
+        )
+
+        if not measure:
+            continue
+
+        # -------------------------------------
+        # Текст для embedding
+        # -------------------------------------
+
+        text_parts = [
+            (
+                "Проблема: "
+                f"{problem}"
+            ),
+            (
+                "Практическое мероприятие: "
+                f"{measure}"
+            ),
+            (
+                "Митигационный эффект: "
+                f"{mitigation}"
+            ),
+            (
+                "Адаптационный эффект: "
+                f"{adaptation_effect}"
+            ),
+        ]
+
+        if district:
+            text_parts.append(
+                "Территория реализации: "
+                f"{district}"
+            )
+
+        if climate_conditions:
+            text_parts.append(
+                "Климатические условия: "
+                f"{climate_conditions}"
+            )
+
+        embed_text = "\n".join(
+            text_parts
+        )
+
+        case_id = (
+            f"case-{row_index + 1}"
+        )
+
+        metadata = {
+            "knowledge_type":
+                "adaptation",
+
+            "source_type":
+                "case",
+
+            "case_id":
+                case_id,
+
+            "title":
+                measure,
+
+            "problem":
+                problem,
+
+            "mitigation_effect":
+                mitigation,
+
+            "adaptation_effect":
+                adaptation_effect,
+
+            "district":
+                district,
+
+            "climate_conditions":
+                climate_conditions,
+
+            "responsible_org":
+                responsible_org,
+
+            "url":
+                source_url,
+
+            "source_file":
+                ADAPTATION_CASES_FILE.name,
+
+            "row_index":
+                str(row_index),
+        }
+
+        metadata = (
+            compact_metadata(
+                metadata
+            )
+        )
+
+        node = TextNode(
+            id_=(
+                "adaptation-case-"
+                f"{row_index + 1}"
+            ),
+
+            text=embed_text,
+
+            metadata=metadata,
+        )
+
+        nodes.append(
+            node
+        )
+
+    print(
+        "ADAPTATION case nodes:",
+        len(nodes),
+    )
+
+    return nodes
+
+
+def create_adaptation_vector_index():
+
+    print(
+        "\n###################################"
+    )
+
+    print(
+        "# BUILD ADAPTATION EMBEDDINGS"
+    )
+
+    print(
+        "###################################"
+    )
+
+    if not (
+        ADAPTATION_REGISTRY_FILE.exists()
+    ):
+        raise FileNotFoundError(
+            "Не найден экспертный реестр: "
+            f"{ADAPTATION_REGISTRY_FILE}"
+        )
+
+    if not (
+        ADAPTATION_CASES_FILE.exists()
+    ):
+        raise FileNotFoundError(
+            "Не найден реестр кейсов: "
+            f"{ADAPTATION_CASES_FILE}"
+        )
+
+    # -------------------------------------
+    # REGISTRY
+    # -------------------------------------
+
+    registry_df = pd.read_excel(
+        ADAPTATION_REGISTRY_FILE
+    )
+
+    registry_df = (
+        normalize_excel_columns(
+            registry_df
+        )
+    )
+
+    validate_adaptation_registry(
+        registry_df
+    )
+
+    registry_nodes = (
+        create_adaptation_registry_nodes(
+            registry_df
+        )
+    )
+
+    # -------------------------------------
+    # CASES
+    # -------------------------------------
+
+    cases_df = pd.read_excel(
+        ADAPTATION_CASES_FILE
+    )
+
+    cases_df = (
+        normalize_excel_columns(
+            cases_df
+        )
+    )
+
+    validate_adaptation_cases(
+        cases_df
+    )
+
+    case_nodes = (
+        create_adaptation_case_nodes(
+            cases_df
+        )
+    )
+
+    # -------------------------------------
+    # TOGETHER
+    # -------------------------------------
+
+    nodes = (
+        registry_nodes
+        + case_nodes
+    )
+
+    print(
+        "\nADAPTATION registry:",
+        len(registry_nodes),
+    )
+
+    print(
+        "ADAPTATION cases:",
+        len(case_nodes),
+    )
+
+    print(
+        "ADAPTATION TOTAL:",
+        len(nodes),
+    )
+
+    return create_index_from_nodes(
+        nodes=nodes,
+        table_name=ADAPTATION_TABLE,
+    )
+
+
 # =====================================================
 # BUILD TARGETS
 # =====================================================
@@ -1823,6 +2442,9 @@ def build_npa_index():
 def build_method_index():
     create_method_vector_index()
 
+
+def build_adaptation_index():
+    create_adaptation_vector_index()
 
 def build_all_indexes():
 
@@ -1887,21 +2509,7 @@ def build_all_indexes():
         "###################################"
     )
 
-    create_vector_index(
-        files=[
-            DATA_DIR
-            / "Реестр_адапт_мер.xlsx",
-
-            DATA_DIR
-            / "Реестр_адапт_мер2.xlsx",
-
-            DATA_DIR
-            / "Реестр_адапт_мер3.xlsx",
-        ],
-        table_name=(
-            ADAPTATION_TABLE
-        ),
-    )
+    create_adaptation_vector_index()
 
 
 # =====================================================
@@ -1918,6 +2526,7 @@ if __name__ == "__main__":
         choices=[
             "npa",
             "method",
+            "adaptation",
             "all",
         ],
         default="npa",
@@ -1936,5 +2545,7 @@ if __name__ == "__main__":
         build_npa_index()
     elif args.target == "method":
         build_method_index()
+    elif args.target == "adaptation":
+        build_adaptation_index()
     else:
         build_all_indexes()

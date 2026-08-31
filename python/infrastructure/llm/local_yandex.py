@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from functools import lru_cache
-
+import threading
 from llama_index.core.llms import ChatMessage
 from llama_index.llms.huggingface import HuggingFaceLLM
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -13,6 +13,7 @@ from core.config import (
     LOCAL_LLM_MODEL_NAME,
     LOCAL_LLM_TOP_P,
 )
+_generation_lock = threading.Lock()
 
 
 @lru_cache(maxsize=1)
@@ -92,7 +93,8 @@ def chat_text(
         ),
     ]
 
-    response = llm.chat(messages)
+    with _generation_lock:
+        response = llm.chat(messages)
 
     return (
         response.message.content

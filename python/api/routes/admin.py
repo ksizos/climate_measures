@@ -42,7 +42,7 @@ async def manual_rebuild() -> dict[str, str]:
 
 
 @router.post("/execute-sql")
-async def execute_sql(
+def execute_sql(
     request: ExecuteSQLRequest,
 ) -> dict[str, object]:
     """

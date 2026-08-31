@@ -29,7 +29,7 @@ router = APIRouter(
 )
 
 @router.post("/docx")
-async def export_docx(
+def export_docx(
     request: ExportRequest,
 ) -> StreamingResponse:
     try:
@@ -148,7 +148,7 @@ async def export_docx(
 
 
 @router.post("/excel")
-async def export_excel(
+def export_excel(
     request: ExportRequest,
 ) -> StreamingResponse:
     try:

@@ -25,7 +25,9 @@ from services.npa_service import (
 from services.statistics_service import (
     generate_statistics_response,
 )
-
+from services.scientific_articles_service import (
+    generate_scientific_articles_response,
+)
 
 AGENT_REGISTRY: dict[str, Callable] = {
     "adaptation": generate_adaptation_response,
@@ -34,6 +36,7 @@ AGENT_REGISTRY: dict[str, Callable] = {
     "analytical": generate_analytical_response,
     "statistics": generate_statistics_response,
     "internet_resources": generate_internet_resources_response,
+    "scientific_articles": generate_scientific_articles_response,
     "dialog": generate_dialog_response,
 }
 

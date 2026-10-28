@@ -16,6 +16,9 @@ from services.internet_resources_service import (
 from services.method_docs_service import (
     generate_method_docs_response,
 )
+from services.analytical_service import (
+    generate_analytical_response,
+)
 from services.npa_service import (
     generate_npa_response,
 )
@@ -28,6 +31,7 @@ AGENT_REGISTRY: dict[str, Callable] = {
     "adaptation": generate_adaptation_response,
     "npa": generate_npa_response,
     "method_docs": generate_method_docs_response,
+    "analytical": generate_analytical_response,
     "statistics": generate_statistics_response,
     "internet_resources": generate_internet_resources_response,
     "dialog": generate_dialog_response,

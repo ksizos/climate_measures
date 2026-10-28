@@ -16,6 +16,7 @@ from core.config import (
     METHOD_DOCS_TABLE,
     INTERNET_RESOURCES_TABLE,
     FLOOD_OBJECTS_TABLE,
+    ANALYTICAL_DOCS_TABLE,
 )
 
 from llama_index.core import (
@@ -86,7 +87,12 @@ ADAPTATION_CASES_FILE = (
     DATA_DIR
     / "Реестр_адапт_мер3.xlsx"
 )
+ANALYTICAL_CATALOG_FILE = DATA_DIR / "ANALYTICAL_TABLE.xlsx"
+ANALYTICAL_DOCUMENTS_DIR = DATA_DIR / "analytical_documents"
 
+ANALYTICAL_REQUIRED_COLUMNS = {
+    "Форма", "Название", "Краткое описание", "ссылка", "input_file"
+}
 # =====================================================
 # HELPERS
 # =====================================================
@@ -2430,6 +2436,136 @@ def create_adaptation_vector_index():
         table_name=ADAPTATION_TABLE,
     )
 
+# =============================================================
+# ANALYTICAL: вставить в scripts/createvector.py
+# Требует уже существующих в createvector.py:
+# DATA_DIR, pd, Path, TextNode, SentenceSplitter,
+# SimpleDirectoryReader, cell_to_text, compact_metadata,
+# create_index_from_nodes, ANALYTICAL_DOCS_TABLE (core.config).
+# =============================================================
+
+
+def create_analytical_vector_index():
+    """Индексирует карточки аналитических документов и фрагменты PDF в одну PGVector-таблицу."""
+    if not ANALYTICAL_DOCS_TABLE:
+        raise ValueError("Не задан ANALYTICAL_DOCS_TABLE в .env")
+    if not ANALYTICAL_CATALOG_FILE.is_file():
+        raise FileNotFoundError(ANALYTICAL_CATALOG_FILE)
+    if not ANALYTICAL_DOCUMENTS_DIR.is_dir():
+        raise FileNotFoundError(ANALYTICAL_DOCUMENTS_DIR)
+
+    df = pd.read_excel(ANALYTICAL_CATALOG_FILE, sheet_name=0)
+    df.columns = [str(col).strip() for col in df.columns]
+    missing = ANALYTICAL_REQUIRED_COLUMNS - set(df.columns)
+    if missing:
+        raise ValueError(f"ANALYTICAL_TABLE.xlsx: отсутствуют колонки {sorted(missing)}")
+    if df.empty:
+        raise ValueError("ANALYTICAL_TABLE.xlsx пуст")
+
+    nodes: list[TextNode] = []
+    seen_files: set[str] = set()
+    catalog_count = 0
+    content_count = 0
+    splitter = SentenceSplitter(chunk_size=1000, chunk_overlap=120)
+
+    # ID вычисляется по номеру строки и хранится строкой: фильтрация без приведения к float.
+    for row_number, (_, row) in enumerate(df.iterrows(), start=1):
+        analytical_id = str(row_number)
+        form = cell_to_text(row["Форма"])
+        title = cell_to_text(row["Название"])
+        description = cell_to_text(row["Краткое описание"])
+        url = cell_to_text(row["ссылка"])
+        filename = cell_to_text(row["input_file"])
+
+        if not title:
+            raise ValueError(f"Строка {row_number + 1}: пустое название")
+        if not url.startswith(("http://", "https://")):
+            raise ValueError(f"Строка {row_number + 1}: отсутствует корректный URL")
+        if not filename or Path(filename).name != filename or Path(filename).suffix.lower() != ".pdf":
+            raise ValueError(f"Строка {row_number + 1}: input_file должен быть именем PDF (например, 1.pdf)")
+        if filename in seen_files:
+            raise ValueError(f"PDF {filename!r} привязан к нескольким строкам каталога")
+        seen_files.add(filename)
+
+        pdf_path = (ANALYTICAL_DOCUMENTS_DIR / filename).resolve()
+        if not pdf_path.is_file():
+            raise FileNotFoundError(f"Для строки {row_number + 1} не найден PDF: {pdf_path}")
+
+        common_meta = compact_metadata({
+            "knowledge_type": "analytical",
+            "analytical_id": analytical_id,
+            "title": title,
+            "form": form,
+            "description": description,
+            "url": url,
+            "input_file": filename,
+        })
+
+        # 1) Одна карточка = один документ каталога.
+        card_meta = dict(common_meta)
+        card_meta.update({"record_type": "catalog", "source": ANALYTICAL_CATALOG_FILE.name})
+        catalog_text = "\n".join(x for x in [
+            f"Форма: {form}" if form else "",
+            f"Название: {title}",
+            f"Краткое описание: {description}" if description else "",
+        ] if x)
+        nodes.append(TextNode(
+            id_=f"analytical-catalog-{analytical_id}",
+            text=catalog_text,
+            metadata=card_meta,
+            excluded_embed_metadata_keys=["url", "input_file", "source", "record_type", "analytical_id"],
+        ))
+        catalog_count += 1
+
+        # 2) Читаем текст PDF постранично и разбиваем на чанки.
+        try:
+            pages = SimpleDirectoryReader(
+                input_files=[str(pdf_path)], raise_on_error=True
+            ).load_data()
+        except Exception as exc:
+            raise RuntimeError(f"Ошибка чтения {filename}: {exc}") from exc
+
+        chunk_index = 0
+        for page_index, page in enumerate(pages, start=1):
+            page_text = (page.text or "").strip()
+            if not page_text:
+                continue
+            page_meta = getattr(page, "metadata", {}) or {}
+            page_label = str(page_meta.get("page_label") or page_meta.get("page_number") or page_index)
+
+            for chunk in splitter.split_text(page_text):
+                if not chunk.strip():
+                    continue
+                chunk_meta = dict(common_meta)
+                chunk_meta.update({
+                    "record_type": "content",
+                    "source": filename,
+                    "page_label": page_label,
+                    "chunk_index": str(chunk_index),
+                })
+                nodes.append(TextNode(
+                    id_=f"analytical-content-{analytical_id}-{chunk_index}",
+                    text=chunk,
+                    metadata=chunk_meta,
+                    # Описание каталога не должно повторяться во всех embedding-чанках.
+                    excluded_embed_metadata_keys=[
+                        "description", "url", "input_file", "source", "record_type",
+                        "analytical_id", "chunk_index", "page_label"
+                    ],
+                ))
+                chunk_index += 1
+                content_count += 1
+
+        if chunk_index == 0:
+            raise ValueError(
+                f"Из {filename} не извлечён текст. Проверь PDF: возможно, это скан без текстового слоя."
+            )
+        print(f"ANALYTICAL {analytical_id}: {filename}, фрагментов={chunk_index}")
+
+    print(f"ANALYTICAL catalog nodes: {catalog_count}")
+    print(f"ANALYTICAL content nodes: {content_count}")
+    print(f"ANALYTICAL total nodes: {len(nodes)}")
+    return create_index_from_nodes(nodes=nodes, table_name=ANALYTICAL_DOCS_TABLE)
 
 # =====================================================
 # BUILD TARGETS
@@ -2510,7 +2646,8 @@ def build_all_indexes():
     )
 
     create_adaptation_vector_index()
-
+    print('\nBUILD ANALYTICAL EMBEDDINGS')
+    create_analytical_vector_index()
 
 # =====================================================
 # MAIN
@@ -2527,13 +2664,14 @@ if __name__ == "__main__":
             "npa",
             "method",
             "adaptation",
+            "analytical",
             "all",
         ],
-        default="npa",
+        default="all",
         help=(
             "Что перестраивать: "
             "npa или all. "
-            "По умолчанию npa."
+            "По умолчанию all."
         ),
     )
 
@@ -2547,5 +2685,7 @@ if __name__ == "__main__":
         build_method_index()
     elif args.target == "adaptation":
         build_adaptation_index()
+    elif args.target == "analytical":
+        create_analytical_vector_index()
     else:
         build_all_indexes()

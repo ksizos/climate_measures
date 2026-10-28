@@ -14,6 +14,15 @@ METHOD_DOCS_TABLE = os.getenv("METHOD_DOCS_TABLE")
 INTERNET_RESOURCES_TABLE = os.getenv("INTERNET_RESOURCES_TABLE")
 FLOOD_OBJECTS_TABLE = os.getenv("FLOOD_OBJECTS_TABLE")
 
+ANALYTICAL_DOCS_TABLE = os.getenv(
+    "ANALYTICAL_DOCS_TABLE",
+)
+
+ANALYTICAL_WEB_SEARCH = os.getenv(
+    "ANALYTICAL_WEB_SEARCH",
+    "true",
+).lower() in {"1", "true", "yes", "on"}
+
 DATA_PATH= Path(os.getenv("DATA_PATH","./data",))
 STATISTICS_PATH = Path(os.getenv("STATISTICS_PATH","./data/Statistics_MO",))
 

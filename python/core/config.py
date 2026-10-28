@@ -179,3 +179,42 @@ YANDEX_CLOUD_BASE_URL = os.getenv(
     "YANDEX_CLOUD_BASE_URL",
     "https://ai.api.cloud.yandex.net/v1",
 ).strip()
+
+# SerpApi
+
+SERPAPI_API_KEY_1 = os.getenv(
+    "SERPAPI_API_KEY_1",
+).strip()
+
+SERPAPI_API_KEY_2 = os.getenv(
+    "SERPAPI_API_KEY_2",
+).strip()
+
+SERPAPI_SEARCH_URL = os.getenv(
+    "SERPAPI_SEARCH_URL",
+    "https://serpapi.com/search.json",
+).strip()
+
+SERPAPI_ACCOUNT_URL = os.getenv(
+    "SERPAPI_ACCOUNT_URL",
+    "https://serpapi.com/account.json",
+).strip()
+
+SERPAPI_HL = os.getenv(
+    "SERPAPI_HL",
+    "ru",
+).strip()
+
+SERPAPI_GL = os.getenv(
+    "SERPAPI_GL",
+    "ru",
+).strip()
+
+SERPAPI_TIMEOUT = float(
+    os.getenv("SERPAPI_TIMEOUT", "45")
+)
+
+SERPAPI_ORGANIC_TOP_K = max(
+    1,
+    int(os.getenv("SERPAPI_ORGANIC_TOP_K", "5")),
+)

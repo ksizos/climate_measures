@@ -25,3 +25,12 @@ yarn-error.log
 .env.local
 /laravel/.idea/
 /python/venv
+laravel/debug.html
+laravel/parser.log
+laravel/tyumen_weather.csv
+python/report_dashboard.py
+python/report_map.py
+python/serapi.py
+python/testingapi.py
+report_outputs/dashboard_prototype.html
+report_outputs/map_prototype.html

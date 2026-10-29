@@ -209,15 +209,15 @@
 
             </div>
 
+            <div class="w-100 d-flex flex-column align-items-start justify-content-center gap-2">
+                <a
+                    href="https://trend-carbon.utmn.ru"
+                    class="help-text m-0 p-0 w-100"
+                    target="_blank"
+                    rel="noopener noreferrer">
 
-            <a
-                href="https://clck.ru/3Rti7j"
-                class="help-text m-0 p-0"
-                target="_blank"
-                rel="noopener noreferrer">
-
-                <div
-                    class="
+                    <div
+                        class="
                         help_button
                         ps-2
                         py-2
@@ -227,16 +227,47 @@
                         gap-2
                     ">
 
-                    <img
-                        class="input_img"
-                        src="{{ asset('icons/question.svg') }}"
-                        alt="">
+                        <img
+                            class="input_img"
+                            src="{{ asset('icons/trendcarbon.png') }}"
+                            alt="">
 
-                    Помощь
+                        <div class="d-flex flex-column align-items-start justify-content-start p-0 m-0">
+                            <p class="p-0 m-0">TrendCarbon</p>
+                            <p class="carbon_desc p-0 m-0">сервис по анализу статей</p>
+                        </div>
+                    </div>
 
-                </div>
+                </a>
 
-            </a>
+                <a
+                    href="https://clck.ru/3Rti7j"
+                    class="help-text m-0 p-0 w-100"
+                    target="_blank"
+                    rel="noopener noreferrer">
+
+                    <div
+                        class="
+                        help_button
+                        ps-2
+                        py-2
+                        d-flex
+                        justify-content-start
+                        align-items-center
+                        gap-2
+                    ">
+
+                        <img
+                            class="input_img"
+                            src="{{ asset('icons/question.svg') }}"
+                            alt="">
+
+                        Помощь
+
+                    </div>
+
+                </a>
+            </div>
 
         </div>
 
